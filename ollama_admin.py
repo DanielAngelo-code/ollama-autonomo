@@ -141,8 +141,24 @@ def chat():
     
     # Verifica se o Ollama está acessível e se o modelo existe
     try:
-        models = ollama.list()
-        model_names = [m['name'] for m in models['models']]
+        models_response = ollama.list()
+        # O retorno de ollama.list() pode variar dependendo da versão da biblioteca
+        # Algumas versões retornam um objeto com atributo 'models', outras um dicionário
+        models_list = []
+        if isinstance(models_response, dict) and 'models' in models_response:
+            models_list = models_response['models']
+        elif hasattr(models_response, 'models'):
+            models_list = models_response.models
+        
+        model_names = []
+        for m in models_list:
+            if isinstance(m, dict) and 'name' in m:
+                model_names.append(m['name'])
+            elif hasattr(m, 'model'): # Algumas versões usam .model em vez de .name
+                model_names.append(m.model)
+            elif hasattr(m, 'name'):
+                model_names.append(m.name)
+
         if 'llama3:latest' not in model_names and 'llama3' not in model_names:
             console.print("[bold yellow]Aviso:[/bold yellow] Modelo 'llama3' não encontrado localmente.")
             with console.status("[bold cyan]Baixando llama3 (isso pode demorar)...[/bold cyan]"):
