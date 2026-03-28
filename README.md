@@ -1,51 +1,75 @@
-# Ollama Server Admin
+# Ollama Autônomo V2 🤖🚀
 
-Este projeto permite que você gerencie um servidor Ubuntu conversando com um assistente Ollama diretamente pelo terminal SSH.
+Gerencie seu servidor Ubuntu através de conversas em linguagem natural com o Ollama, diretamente via SSH. Este assistente é capaz de executar comandos, analisar resultados e realizar tarefas multi-etapa de forma autônoma.
 
-## Pré-requisitos
+![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-LLM-blue?style=for-the-badge)
+![AMD RX 580](https://img.shields.io/badge/AMD%20RX%20580-Vulkan-ED1C24?style=for-the-badge&logo=amd&logoColor=white)
 
-1. **Ollama instalado**: Certifique-se de que o Ollama está rodando no seu servidor.
-2. **Modelo Llama 3**: O script usa o modelo `llama3`. Baixe-o com:
+## ✨ Funcionalidades
+
+- **Autonomia Total**: A IA executa comandos, lê a saída e decide o próximo passo até completar a tarefa.
+- **Feedback em Tempo Real**: Mostra o que está pensando e fazendo antes de cada execução.
+- **Otimizado para AMD**: Configurado para reconhecer hardware AMD RX 580 com suporte a Vulkan.
+- **Interface Rica**: Utiliza a biblioteca `rich` para um terminal organizado e legível.
+- **Segurança**: Inclui limites de etapas (max 10) para evitar loops e consumo excessivo.
+
+## 🛠️ Pré-requisitos
+
+1. **Ollama**: Instalado e rodando.
+2. **Modelo Llama 3**: `ollama pull llama3`.
+3. **Hardware**: Otimizado para Ubuntu com GPU AMD RX 580 (Vulkan).
+
+## 🚀 Instalação e Comando Global
+
+1. Clone o repositório:
    ```bash
-   ollama pull llama3
+   git clone https://github.com/seu-usuario/ollama-autonomo.git
+   cd ollama-autonomo
    ```
-3. **Python 3.x**: O script é escrito em Python.
 
-## Instalação
-
-1. Clone ou baixe este repositório no seu servidor Ubuntu.
-2. Crie um ambiente virtual (recomendado para evitar erros de sistema):
+2. Crie e ative um ambiente virtual:
    ```bash
    python3 -m venv venv
-   ```
-3. Ative o ambiente virtual:
-   ```bash
    source venv/bin/activate
-   ```
-4. Instale as dependências:
-   ```bash
    pip install -r requirements.txt
    ```
 
-## Uso
+3. **Configurar Comando Global**:
+   Para chamar o assistente de qualquer lugar usando apenas `ollama-admin`:
+   ```bash
+   # Dê permissão ao script de entrada
+   chmod +x ollama-admin.sh
+   
+   # Crie um link simbólico no seu bin (as aspas são importantes se o seu caminho tiver espaços!)
+   sudo ln -s "$(pwd)/ollama-admin.sh" /usr/local/bin/ollama-admin
+   ```
 
-Com o ambiente virtual ativado:
+## 📖 Como Usar
+
+### Execução Global
 ```bash
-python ollama_admin.py
+ollama-admin
 ```
 
-### Configurar como Shell SSH
+### Atualizações Automáticas
+O sistema verifica por atualizações no GitHub toda vez que você inicia o `ollama-admin`. Se houver uma nova versão no repositório, ele fará o `git pull` automaticamente.
 
-Para que este script seja carregado automaticamente quando você entrar no servidor via SSH, use o caminho do Python do ambiente virtual:
+### Integração SSH (Modo "Shell AI")
+Para que o assistente inicie automaticamente ao logar via SSH, adicione ao seu `~/.bashrc`:
 
-**Recomendado (Adicionar ao .bashrc):**
 ```bash
-echo "/caminho/completo/para/ollama-autonomo/venv/bin/python /caminho/completo/para/ollama-autonomo/ollama_admin.py && exit" >> ~/.bashrc
+ollama-admin && exit
 ```
-*Substitua `/caminho/completo/para/ollama-autonomo/` pelo caminho real onde você salvou o projeto.*
 
-*Isso fará com que o script inicie assim que você logar e encerre a sessão SSH quando você sair do assistente.*
+## 🛡️ Segurança e Responsabilidade
 
-## Segurança
-- O assistente agora é **autônomo** e executa comandos diretamente para agilizar o gerenciamento.
-- **Cuidado:** Como não há mais confirmação manual, use comandos claros e evite pedir ações destrutivas a menos que tenha certeza.
+Este script possui **autonomia para executar comandos BASH**. 
+- Não há confirmação manual (s/n) por padrão.
+- Use com cautela em ambientes de produção.
+- O autor não se responsabiliza por danos causados por comandos sugeridos pelo LLM.
+
+## 📄 Licença
+
+Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.

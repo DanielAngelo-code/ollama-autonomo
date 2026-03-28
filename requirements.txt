@@ -1,2 +1,4 @@
 ollama
 rich
+requests
+pygame

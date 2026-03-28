@@ -2,11 +2,70 @@ import ollama
 import subprocess
 import sys
 import re
+import requests
+import json
+import os
+import time
+import pygame
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 
+# Configurações Murf.ai
+MURF_API_KEY = "ap2_6ca244bd-f1c0-4414-af05-d862ab93ec11"
+MURF_VOICE_ID = "Benício"
+MURF_STYLE = "Conversational"
+MURF_MODEL = "Falcon"
+
 console = Console()
+
+# Inicializa mixer de áudio
+pygame.mixer.init()
+
+def speak(text):
+    """Envia o texto para murf.ai e reproduz o áudio resultante."""
+    if not text.strip():
+        return
+
+    # Limpa markdown simples para a fala ser mais natural
+    clean_text = re.sub(r'[*_#`]', '', text)
+    
+    url = "https://api.murf.ai/v1/speech/generate"
+    headers = {
+        "Content-Type": "application/json",
+        "apiKey": MURF_API_KEY
+    }
+    payload = {
+        "voiceId": MURF_VOICE_ID,
+        "style": MURF_STYLE,
+        "text": clean_text,
+        "model": MURF_MODEL,
+        "format": "MP3"
+    }
+
+    try:
+        with console.status("[bold magenta]Gerando voz (Murf.ai)...[/bold magenta]"):
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            audio_url = response.json().get("audioUrl")
+
+            if audio_url:
+                # Download do áudio temporário
+                audio_data = requests.get(audio_url).content
+                temp_file = "temp_voice.mp3"
+                with open(temp_file, "wb") as f:
+                    f.write(audio_data)
+
+                # Reprodução
+                pygame.mixer.music.load(temp_file)
+                pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():
+                    time.sleep(0.1)
+                
+                pygame.mixer.music.unload()
+                os.remove(temp_file)
+    except Exception as e:
+        console.print(f"[dim red](Erro ao gerar voz: {e})[/dim red]")
 
 SYSTEM_PROMPT = """
 Você é um administrador de servidor Ubuntu autônomo e proativo. 
@@ -52,8 +111,35 @@ def execute_command(command):
     except Exception as e:
         return "", str(e), 1
 
+def check_for_updates():
+    """Verifica se há atualizações no repositório git e as aplica."""
+    try:
+        # Verifica se estamos em um repositório git
+        if not os.path.exists(".git"):
+            return False
+
+        with console.status("[bold blue]Verificando atualizações...[/bold blue]"):
+            # Faz um fetch para ver se há mudanças
+            subprocess.run(["git", "fetch"], capture_output=True, check=True)
+            status = subprocess.run(["git", "status", "-uno"], capture_output=True, text=True, check=True)
+            
+            if "Your branch is behind" in status.stdout:
+                console.print("[bold yellow]Nova atualização encontrada! Aplicando...[/bold yellow]")
+                subprocess.run(["git", "pull"], capture_output=True, check=True)
+                console.print("[bold green]Projeto atualizado com sucesso! Reinicie para aplicar.[/bold green]")
+                return True
+            else:
+                console.print("[dim cyan]O projeto já está na versão mais recente.[/dim cyan]")
+                return False
+    except Exception as e:
+        console.print(f"[dim red](Erro ao verificar atualizações: {e})[/dim red]")
+        return False
+
 def chat():
-    console.print(Panel("[bold green]Ollama Autônomo V2[/bold green]\nModo multi-etapa com atualizações em tempo real.", title="Sistema Ativo"))
+    # Verifica atualizações ao iniciar
+    check_for_updates()
+    
+    console.print(Panel("[bold green]Ollama Autônomo V2[/bold green]\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
     
     messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
 
@@ -92,6 +178,8 @@ def chat():
                     continue
                 else:
                     console.print(Panel(Markdown(llm_response), border_style="green", title="Tarefa Concluída"))
+                    # Fala a resposta final
+                    speak(llm_response)
                     break
             
             if step_count >= max_steps:
