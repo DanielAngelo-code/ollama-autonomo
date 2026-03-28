@@ -211,10 +211,8 @@ def chat():
                 model_names.append(m.name)
 
         if OLLAMA_MODEL not in model_names and (OLLAMA_MODEL + ":latest") not in model_names:
-            console.print(f"[bold yellow]Aviso:[/bold yellow] Modelo '{OLLAMA_MODEL}' não encontrado localmente.")
-            with console.status(f"[bold cyan]Baixando {OLLAMA_MODEL} (isso pode demorar)...[/bold cyan]"):
-                ollama.pull(OLLAMA_MODEL)
-                console.print(f"[bold green]Modelo {OLLAMA_MODEL} baixado com sucesso![/bold green]")
+            console.print(Panel(f"[bold red]Aviso:[/bold red] O modelo '[bold cyan]{OLLAMA_MODEL}[/bold cyan]' não foi encontrado.\n\nPor favor, baixe-o manualmente no terminal com:\n[bold green]ollama pull {OLLAMA_MODEL}[/bold green]", title="Modelo Ausente", border_style="yellow"))
+            return
     except Exception as e:
         console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando no servidor.", title="Erro Crítico", border_style="red"))
         return
@@ -233,24 +231,36 @@ def chat():
             # Comando para trocar o modelo em tempo real
             if user_input.startswith("/model "):
                 new_model = user_input.split(" ")[1].strip()
-                with console.status(f"[bold yellow]Trocando para {new_model}...[/bold yellow]"):
-                    try:
-                        # Verifica se o modelo já existe antes de tentar baixar
-                        models_response = ollama.list()
-                        models_list = models_response.get('models', []) if isinstance(models_response, dict) else getattr(models_response, 'models', [])
-                        model_names = [m.get('name') if isinstance(m, dict) else getattr(m, 'name', '') for m in models_list]
-                        
-                        if new_model not in model_names and (new_model + ":latest") not in model_names:
-                            ollama.pull(new_model)
-                        
-                        OLLAMA_MODEL = new_model
-                        config["model"] = OLLAMA_MODEL
-                        save_config(config)
-                        console.print(f"[bold green]Modelo alterado para {OLLAMA_MODEL} e salvo nas configurações![/bold green]")
+                try:
+                    # Verifica se o modelo já existe antes de permitir a troca
+                    models_response = ollama.list()
+                    models_list = []
+                    if isinstance(models_response, dict) and 'models' in models_response:
+                        models_list = models_response['models']
+                    elif hasattr(models_response, 'models'):
+                        models_list = models_response.models
+                    
+                    model_names = []
+                    for m in models_list:
+                        if isinstance(m, dict) and 'name' in m:
+                            model_names.append(m['name'])
+                        elif hasattr(m, 'model'):
+                            model_names.append(m.model)
+                        elif hasattr(m, 'name'):
+                            model_names.append(m.name)
+                    
+                    if new_model not in model_names and (new_model + ":latest") not in model_names:
+                        console.print(f"[bold red]Erro:[/bold red] O modelo '{new_model}' não está baixado.\nBaixe-o primeiro no terminal com: [bold green]ollama pull {new_model}[/bold green]")
                         continue
-                    except Exception as e:
-                        console.print(f"[bold red]Erro ao carregar modelo {new_model}: {e}[/bold red]")
-                        continue
+                    
+                    OLLAMA_MODEL = new_model
+                    config["model"] = OLLAMA_MODEL
+                    save_config(config)
+                    console.print(f"[bold green]Modelo alterado para {OLLAMA_MODEL} e salvo![/bold green]")
+                    continue
+                except Exception as e:
+                    console.print(f"[bold red]Erro ao verificar modelo {new_model}: {e}[/bold red]")
+                    continue
 
             messages.append({'role': 'user', 'content': user_input})
             
