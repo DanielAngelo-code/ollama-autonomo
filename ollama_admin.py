@@ -15,9 +15,31 @@ from rich.text import Text
 
 # Configurações Murf.ai
 MURF_API_KEY = "ap2_6ca244bd-f1c0-4414-af05-d862ab93ec11"
-MURF_VOICE_ID = "benicio" # Removido acento para compatibilidade com API
+MURF_VOICE_ID = "pt-BR-benicio" # Formato padrão para voice_id (ex: locale-nome)
 MURF_STYLE = "Conversational"
 MURF_MODEL_VERSION = "GEN2"
+
+# Configurações do Ollama
+DEFAULT_MODEL = "llama3"
+CONFIG_FILE = "config.json"
+
+def load_config():
+    """Carrega as configurações do arquivo JSON."""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {"model": DEFAULT_MODEL}
+
+def save_config(config):
+    """Salva as configurações no arquivo JSON."""
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=4)
+
+config = load_config()
+OLLAMA_MODEL = config.get("model", DEFAULT_MODEL)
 
 console = Console()
 
@@ -144,7 +166,27 @@ def check_for_updates():
         console.print(f"[dim red](Erro ao verificar atualizações: {e})[/dim red]")
         return False
 
+# Configurações do Ollama
+DEFAULT_MODEL = "llama3"
+CONFIG_FILE = "config.json"
+
+def load_config():
+    """Carrega as configurações do arquivo JSON."""
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    return {"model": DEFAULT_MODEL}
+
+def save_config(config):
+    """Salva as configurações no arquivo JSON."""
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=4)
+
+config = load_config()
+OLLAMA_MODEL = config.get("model", DEFAULT_MODEL)
+
 def chat():
+    global OLLAMA_MODEL
     # Verifica atualizações ao iniciar
     check_for_updates()
     
@@ -168,16 +210,16 @@ def chat():
             elif hasattr(m, 'name'):
                 model_names.append(m.name)
 
-        if 'llama3:latest' not in model_names and 'llama3' not in model_names:
-            console.print("[bold yellow]Aviso:[/bold yellow] Modelo 'llama3' não encontrado localmente.")
-            with console.status("[bold cyan]Baixando llama3 (isso pode demorar)...[/bold cyan]"):
-                ollama.pull('llama3')
-                console.print("[bold green]Modelo llama3 baixado com sucesso![/bold green]")
+        if OLLAMA_MODEL not in model_names and (OLLAMA_MODEL + ":latest") not in model_names:
+            console.print(f"[bold yellow]Aviso:[/bold yellow] Modelo '{OLLAMA_MODEL}' não encontrado localmente.")
+            with console.status(f"[bold cyan]Baixando {OLLAMA_MODEL} (isso pode demorar)...[/bold cyan]"):
+                ollama.pull(OLLAMA_MODEL)
+                console.print(f"[bold green]Modelo {OLLAMA_MODEL} baixado com sucesso![/bold green]")
     except Exception as e:
         console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando no servidor.", title="Erro Crítico", border_style="red"))
         return
 
-    console.print(Panel("[bold green]Ollama Autônomo V2[/bold green]\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
+    console.print(Panel(f"[bold green]Ollama Autônomo V2[/bold green]\nModelo atual: [bold cyan]{OLLAMA_MODEL}[/bold cyan]\nDigite '/model <nome>' para trocar.\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
     
     messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
 
@@ -188,6 +230,28 @@ def chat():
             if user_input.lower() in ["sair", "exit", "quit"]:
                 break
 
+            # Comando para trocar o modelo em tempo real
+            if user_input.startswith("/model "):
+                new_model = user_input.split(" ")[1].strip()
+                with console.status(f"[bold yellow]Trocando para {new_model}...[/bold yellow]"):
+                    try:
+                        # Verifica se o modelo já existe antes de tentar baixar
+                        models_response = ollama.list()
+                        models_list = models_response.get('models', []) if isinstance(models_response, dict) else getattr(models_response, 'models', [])
+                        model_names = [m.get('name') if isinstance(m, dict) else getattr(m, 'name', '') for m in models_list]
+                        
+                        if new_model not in model_names and (new_model + ":latest") not in model_names:
+                            ollama.pull(new_model)
+                        
+                        OLLAMA_MODEL = new_model
+                        config["model"] = OLLAMA_MODEL
+                        save_config(config)
+                        console.print(f"[bold green]Modelo alterado para {OLLAMA_MODEL} e salvo nas configurações![/bold green]")
+                        continue
+                    except Exception as e:
+                        console.print(f"[bold red]Erro ao carregar modelo {new_model}: {e}[/bold red]")
+                        continue
+
             messages.append({'role': 'user', 'content': user_input})
             
             step_count = 0
@@ -195,12 +259,12 @@ def chat():
 
             while step_count < max_steps:
                 full_response = ""
-                with Live(Text("Ollama pensando...", style="bold yellow"), refresh_per_second=10) as live:
-                    response_gen = ollama.chat(model='llama3', messages=messages, stream=True)
+                with Live(Text(f"Ollama ({OLLAMA_MODEL}) pensando...", style="bold yellow"), refresh_per_second=10) as live:
+                    response_gen = ollama.chat(model=OLLAMA_MODEL, messages=messages, stream=True)
                     for chunk in response_gen:
                         content = chunk['message']['content']
                         full_response += content
-                        # Mostra o progresso em tempo real (limitado para não poluir muito)
+                        # Mostra o progresso em tempo real
                         live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
                 
                 llm_response = full_response

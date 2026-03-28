@@ -53,6 +53,10 @@ Gerencie seu servidor Ubuntu através de conversas em linguagem natural com o Ol
 ollama-admin
 ```
 
+### Comandos Especiais
+- `/model <nome-do-modelo>`: Troca o modelo do Ollama em tempo real (ex: `/model llama3:8b` ou `/model phind-codellama`). O modelo escolhido é salvo e será usado nas próximas inicializações.
+- `sair`, `exit` ou `quit`: Encerra o assistente.
+
 ### Atualizações Automáticas
 O sistema verifica por atualizações no GitHub toda vez que você inicia o `ollama-admin`. Se houver uma nova versão no repositório, ele fará o `git pull` automaticamente.
 
