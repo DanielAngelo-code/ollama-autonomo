@@ -205,6 +205,8 @@ def chat():
                     step_count += 1
                     if summary:
                         console.print(f"[italic yellow]→ {summary}[/italic yellow]")
+                        # Fala o resumo da etapa atual
+                        speak(summary)
                     
                     console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
                     stdout, stderr, code = execute_command(command)
