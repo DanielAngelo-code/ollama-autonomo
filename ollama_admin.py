@@ -236,7 +236,7 @@ config = load_config()
 OLLAMA_MODEL = config.get("model", DEFAULT_MODEL)
 
 def chat():
-    global OLLAMA_MODEL
+    global OLLAMA_MODEL, memory
     # Verifica atualizações ao iniciar
     check_for_updates()
     
