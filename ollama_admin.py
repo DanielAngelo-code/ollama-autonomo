@@ -13,9 +13,9 @@ from rich.markdown import Markdown
 
 # Configurações Murf.ai
 MURF_API_KEY = "ap2_6ca244bd-f1c0-4414-af05-d862ab93ec11"
-MURF_VOICE_ID = "Benício"
+MURF_VOICE_ID = "benicio" # Removido acento para compatibilidade com API
 MURF_STYLE = "Conversational"
-MURF_MODEL = "Falcon"
+MURF_MODEL_VERSION = "GEN2"
 
 console = Console()
 
@@ -33,19 +33,26 @@ def speak(text):
     url = "https://api.murf.ai/v1/speech/generate"
     headers = {
         "Content-Type": "application/json",
-        "apiKey": MURF_API_KEY
+        "api-key": MURF_API_KEY # Header correto para a API Murf.ai
     }
     payload = {
         "voiceId": MURF_VOICE_ID,
         "style": MURF_STYLE,
         "text": clean_text,
-        "model": MURF_MODEL,
-        "format": "MP3"
+        "format": "MP3",
+        "modelVersion": MURF_MODEL_VERSION,
+        "locale": "pt-BR" # Garante que o modelo use o sotaque correto
     }
 
     try:
         with console.status("[bold magenta]Gerando voz (Murf.ai)...[/bold magenta]"):
             response = requests.post(url, headers=headers, json=payload)
+            if response.status_code != 200:
+                try:
+                    error_detail = response.json()
+                    console.print(f"[dim red](Murf.ai Erro Detalhado: {error_detail})[/dim red]")
+                except:
+                    console.print(f"[dim red](Murf.ai Erro HTTP {response.status_code})[/dim red]")
             response.raise_for_status()
             audio_url = response.json().get("audioUrl")
 
