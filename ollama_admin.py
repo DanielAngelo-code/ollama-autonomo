@@ -10,6 +10,8 @@ import pygame
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.live import Live
+from rich.text import Text
 
 # Configurações Murf.ai
 MURF_API_KEY = "ap2_6ca244bd-f1c0-4414-af05-d862ab93ec11"
@@ -192,10 +194,16 @@ def chat():
             max_steps = 10
 
             while step_count < max_steps:
-                with console.status(f"[bold yellow]Ollama pensando...[/bold yellow]"):
-                    response = ollama.chat(model='llama3', messages=messages)
-
-                llm_response = response['message']['content']
+                full_response = ""
+                with Live(Text("Ollama pensando...", style="bold yellow"), refresh_per_second=10) as live:
+                    response_gen = ollama.chat(model='llama3', messages=messages, stream=True)
+                    for chunk in response_gen:
+                        content = chunk['message']['content']
+                        full_response += content
+                        # Mostra o progresso em tempo real (limitado para não poluir muito)
+                        live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
+                
+                llm_response = full_response
                 messages.append({'role': 'assistant', 'content': llm_response})
                 
                 command = extract_bash_command(llm_response)
