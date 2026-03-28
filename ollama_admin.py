@@ -13,33 +13,73 @@ from rich.markdown import Markdown
 from rich.live import Live
 from rich.text import Text
 
-# Configurações Murf.ai
-MURF_API_KEY = "ap2_6ca244bd-f1c0-4414-af05-d862ab93ec11"
-MURF_VOICE_ID = "pt-BR-benicio" # Formato padrão para voice_id (ex: locale-nome)
-MURF_STYLE = "Conversational"
-MURF_MODEL_VERSION = "GEN2"
+# Configurações Persistentes (Localizadas na pasta /data)
+DATA_DIR = "data"
+SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
+MEMORY_FILE = os.path.join(DATA_DIR, "memory.json")
 
-# Configurações do Ollama
-DEFAULT_MODEL = "llama3"
-CONFIG_FILE = "config.json"
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
-def load_config():
-    """Carrega as configurações do arquivo JSON."""
-    if os.path.exists(CONFIG_FILE):
+def load_settings():
+    """Carrega as configurações e chaves da pasta data."""
+    default_settings = {
+        "murf_api_key": "",
+        "ollama_model": "llama3",
+        "voice_id": "pt-BR-benicio",
+        "voice_style": "Conversational"
+    }
+    if os.path.exists(SETTINGS_FILE):
         try:
-            with open(CONFIG_FILE, 'r') as f:
+            with open(SETTINGS_FILE, 'r') as f:
+                settings = json.load(f)
+                # Garante que todos os campos padrão existam
+                for key, value in default_settings.items():
+                    if key not in settings:
+                        settings[key] = value
+                return settings
+        except:
+            pass
+    return default_settings
+
+def save_settings(settings):
+    """Salva as configurações na pasta data."""
+    with open(SETTINGS_FILE, 'w') as f:
+        json.dump(settings, f, indent=4)
+
+def load_memory():
+    """Carrega a memória de longo prazo da pasta data."""
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, 'r') as f:
                 return json.load(f)
         except:
             pass
-    return {"model": DEFAULT_MODEL}
+    return {"notes": [], "last_interaction": ""}
 
-def save_config(config):
-    """Salva as configurações no arquivo JSON."""
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=4)
+def save_memory(memory):
+    """Salva a memória de longo prazo na pasta data."""
+    with open(MEMORY_FILE, 'w') as f:
+        json.dump(memory, f, indent=4)
 
-config = load_config()
-OLLAMA_MODEL = config.get("model", DEFAULT_MODEL)
+# Inicializa configurações e memória
+settings = load_settings()
+memory = load_memory()
+
+# Solicita a chave Murf.ai se não estiver presente
+if not settings["murf_api_key"]:
+    console.print(Panel("[bold yellow]Configuração Inicial do Murf.ai[/bold yellow]\nNenhuma chave de API encontrada na pasta /data.\n\nVocê pode colar sua chave agora ou pressionar Enter para continuar sem voz.", title="Ação Necessária"))
+    key = console.input("[bold cyan]Chave Murf.ai (ap2_...): [/bold cyan]").strip()
+    if key:
+        settings["murf_api_key"] = key
+        save_settings(settings)
+        console.print("[bold green]Chave salva com sucesso em data/settings.json![/bold green]")
+
+MURF_API_KEY = settings["murf_api_key"]
+MURF_VOICE_ID = settings["voice_id"]
+MURF_STYLE = settings["voice_style"]
+MURF_MODEL_VERSION = "GEN2"
+OLLAMA_MODEL = settings["ollama_model"]
 
 console = Console()
 
@@ -106,6 +146,9 @@ CONTEXTO DO SERVIDOR:
 - Hardware: O servidor possui uma GPU AMD Radeon RX 580.
 - Gráficos/Computação: Utiliza Vulkan para aceleração.
 - LLM: O Ollama está rodando e deve aproveitar a aceleração da GPU se configurado corretamente.
+
+MEMÓRIA DO SISTEMA:
+Sua memória persistente está localizada em /data/memory.json. Use as informações lá para ser mais eficiente. Se o usuário pedir para "lembrar" algo, o script cuidará de salvar na próxima etapa.
 
 DIRETRIZES DE AUTONOMIA:
 1. **Raciocínio Multi-etapa**: Planeje e execute uma etapa por vez.
@@ -216,8 +259,8 @@ def chat():
                 choice = console.input("[bold blue]Sua escolha:[/bold blue] ").strip()
                 if choice in model_names or (choice + ":latest") in model_names:
                     OLLAMA_MODEL = choice
-                    config["model"] = OLLAMA_MODEL
-                    save_config(config)
+                    settings["ollama_model"] = OLLAMA_MODEL
+                    save_settings(settings)
                 else:
                     return
             else:
@@ -229,7 +272,11 @@ def chat():
 
     console.print(Panel(f"[bold green]Ollama Autônomo V2[/bold green]\nModelo atual: [bold cyan]{OLLAMA_MODEL}[/bold cyan]\nDigite '/model <nome>' para trocar.\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
     
-    messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
+    # Prepara prompt de sistema com a memória atual
+    current_memory_text = json.dumps(memory, indent=2, ensure_ascii=False)
+    system_message = f"{SYSTEM_PROMPT}\n\nMEMÓRIA ATUAL:\n{current_memory_text}"
+    
+    messages = [{'role': 'system', 'content': system_message}]
 
     while True:
         try:
@@ -264,8 +311,8 @@ def chat():
                         continue
                     
                     OLLAMA_MODEL = new_model
-                    config["model"] = OLLAMA_MODEL
-                    save_config(config)
+                    settings["ollama_model"] = OLLAMA_MODEL
+                    save_settings(settings)
                     console.print(f"[bold green]Modelo alterado para {OLLAMA_MODEL} e salvo![/bold green]")
                     continue
                 except Exception as e:
@@ -304,6 +351,11 @@ def chat():
                     stdout, stderr, code = execute_command(command)
                     
                     result_msg = f"RESULTADO DA ETAPA {step_count}:\nSTDOUT: {stdout}\nSTDERR: {stderr}\nEXIT_CODE: {code}"
+                    
+                    # Limita o tamanho do resultado para não pesar no contexto da IA
+                    if len(result_msg) > 2000:
+                        result_msg = result_msg[:1000] + "\n... (saída truncada por ser muito longa) ...\n" + result_msg[-1000:]
+                    
                     messages.append({'role': 'user', 'content': result_msg})
                     continue
                 else:

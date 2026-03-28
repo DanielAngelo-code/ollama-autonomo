@@ -14,6 +14,7 @@ Gerencie seu servidor Ubuntu através de conversas em linguagem natural com o Ol
 - **Otimizado para AMD**: Configurado para reconhecer hardware AMD RX 580 com suporte a Vulkan.
 - **Interface Rica**: Utiliza a biblioteca `rich` para um terminal organizado e legível.
 - **Segurança**: Inclui limites de etapas (max 10) para evitar loops e consumo excessivo.
+- **Persistência de Dados**: Pasta `/data` dedicada para armazenar chaves de API, configurações de modelo e memória de longo prazo, protegida contra atualizações do GitHub.
 
 ## 🛠️ Pré-requisitos
 
