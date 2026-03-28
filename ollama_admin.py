@@ -29,7 +29,8 @@ def load_settings():
         "murf_api_key": "",
         "ollama_model": "llama3",
         "voice_id": "pt-BR-benicio",
-        "voice_style": "Conversational"
+        "voice_style": "Conversational",
+        "sudo_password": ""
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -171,16 +172,30 @@ def extract_summary(response):
     return text
 
 def execute_command(command):
-    """Executa o comando no terminal e retorna a saída."""
+    """Executa o comando no terminal e retorna a saída, lidando com sudo se necessário."""
+    sudo_password = settings.get("sudo_password", "")
+    
+    # Se o comando usa sudo e temos uma senha salva, injetamos a senha
+    if command.strip().startswith("sudo ") and sudo_password:
+        # Usamos 'sudo -S' para ler a senha do stdin
+        final_command = command.replace("sudo ", f"echo '{sudo_password}' | sudo -S ", 1)
+    else:
+        final_command = command
+
     try:
         process = subprocess.Popen(
-            command,
+            final_command,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
         stdout, stderr = process.communicate()
+        
+        # Limpa a saída do sudo -S para não poluir o log da IA
+        if "[sudo] password for" in stderr:
+            stderr = re.sub(r"\[sudo\] password for .*?:", "", stderr).strip()
+            
         return stdout, stderr, process.returncode
     except Exception as e:
         return "", str(e), 1
@@ -318,6 +333,47 @@ def chat():
                 except Exception as e:
                     console.print(f"[bold red]Erro ao verificar modelo {new_model}: {e}[/bold red]")
                     continue
+
+            # Novo comando para listar vozes do Murf.ai
+            if user_input.strip() == "/voices":
+                if not MURF_API_KEY:
+                    console.print("[bold red]Erro:[/bold red] Chave API do Murf.ai não configurada.")
+                    continue
+                with console.status("[bold magenta]Buscando vozes...[/bold magenta]"):
+                    try:
+                        url = "https://api.murf.ai/v1/speech/voices"
+                        headers = {"api-key": MURF_API_KEY}
+                        response = requests.get(url, headers=headers)
+                        response.raise_for_status()
+                        voices = response.json()
+                        pt_voices = [v for v in voices if v.get('locale') == 'pt-BR']
+                        
+                        table_text = "[bold cyan]Vozes Disponíveis (pt-BR):[/bold cyan]\n"
+                        for v in pt_voices:
+                            table_text += f"- Nome: {v.get('displayName')}, ID: [bold]{v.get('voiceId')}[/bold]\n"
+                        
+                        console.print(Panel(table_text, title="Murf.ai Voices"))
+                        console.print("Use `/setvoice <ID>` para trocar.")
+                    except Exception as e:
+                        console.print(f"[bold red]Erro ao listar vozes:[/bold red] {e}")
+                continue
+
+            # Novo comando para trocar a voz
+            if user_input.startswith("/setvoice "):
+                new_voice = user_input.split(" ")[1].strip()
+                settings["voice_id"] = new_voice
+                save_settings(settings)
+                MURF_VOICE_ID = new_voice
+                console.print(f"[bold green]Voz alterada para {new_voice} e salva![/bold green]")
+                continue
+
+            # Novo comando para configurar a senha sudo
+            if user_input.startswith("/setsudo "):
+                password = user_input.split(" ", 1)[1].strip()
+                settings["sudo_password"] = password
+                save_settings(settings)
+                console.print("[bold green]Senha sudo salva com sucesso em data/settings.json![/bold green]")
+                continue
 
             messages.append({'role': 'user', 'content': user_input})
             

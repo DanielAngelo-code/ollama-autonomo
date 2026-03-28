@@ -55,7 +55,10 @@ ollama-admin
 ```
 
 ### Comandos Especiais
-- `/model <nome-do-modelo>`: Troca o modelo do Ollama em tempo real (ex: `/model llama3:8b` ou `/model phind-codellama`). O modelo escolhido é salvo e será usado nas próximas inicializações.
+- `/model <nome-do-modelo>`: Troca o modelo do Ollama em tempo real (ex: `/model llama3:8b`). O modelo deve estar baixado.
+- `/voices`: Lista todas as vozes disponíveis para o Murf.ai no idioma pt-BR, mostrando seus IDs.
+- `/setvoice <ID>`: Altera a voz do assistente usando o ID obtido no comando anterior.
+- `/setsudo <senha>`: Salva sua senha do usuário para que a IA possa executar comandos `sudo` automaticamente sem te interromper.
 - `sair`, `exit` ou `quit`: Encerra o assistente.
 
 ### Atualizações Automáticas
