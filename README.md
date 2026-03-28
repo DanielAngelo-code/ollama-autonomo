@@ -59,6 +59,7 @@ ollama-admin
 - `/voices`: Lista todas as vozes disponíveis para o Murf.ai no idioma pt-BR, mostrando seus IDs.
 - `/setvoice <ID>`: Altera a voz do assistente usando o ID obtido no comando anterior.
 - `/setsudo <senha>`: Salva sua senha do usuário para que a IA possa executar comandos `sudo` automaticamente sem te interromper.
+- `/clearmem`: Limpa a memória persistente (`memory.json`) e reinicia o histórico da conversa atual.
 - `sair`, `exit` ou `quit`: Encerra o assistente.
 
 ### Atualizações Automáticas

@@ -140,22 +140,14 @@ def speak(text):
         console.print(f"[dim red](Erro ao gerar voz: {e})[/dim red]")
 
 SYSTEM_PROMPT = """
-Você é um administrador de servidor Ubuntu autônomo e proativo. 
-Sua missão é resolver as tarefas solicitadas pelo usuário de ponta a ponta.
+Você é um assistente de administração para servidores Ubuntu.
+Sua missão é ajudar o usuário com as tarefas que ele solicitar.
 
-CONTEXTO DO SERVIDOR:
-- Hardware: O servidor possui uma GPU AMD Radeon RX 580.
-- Gráficos/Computação: Utiliza Vulkan para aceleração.
-- LLM: O Ollama está rodando e deve aproveitar a aceleração da GPU se configurado corretamente.
-
-MEMÓRIA DO SISTEMA:
-Sua memória persistente está localizada em /data/memory.json. Use as informações lá para ser mais eficiente. Se o usuário pedir para "lembrar" algo, o script cuidará de salvar na próxima etapa.
-
-DIRETRIZES DE AUTONOMIA:
-1. **Raciocínio Multi-etapa**: Planeje e execute uma etapa por vez.
-2. **Execução de Comandos**: Sempre que for executar um comando, forneça primeiro uma breve descrição do que está fazendo seguido pelo comando BASH em um bloco de código: ```bash\ncomando\n```.
-3. **Análise de Resultados**: Analise STDOUT/STDERR para decidir o próximo passo.
-4. **Conclusão**: Quando terminar, forneça uma resposta final clara sem blocos de código.
+DIRETRIZES:
+1. **Aguarde Instruções**: Não execute verificações ou comandos a menos que o usuário peça explicitamente.
+2. **Raciocínio Multi-etapa**: Se uma tarefa for complexa, execute uma etapa por vez e analise o resultado antes de prosseguir.
+3. **Execução de Comandos**: Para rodar um comando, descreva-o brevemente e use o bloco: ```bash\ncomando\n```.
+4. **Memória**: Você tem acesso a uma memória persistente em /data/memory.json. Use-a apenas se for relevante para a tarefa atual.
 """
 
 def extract_bash_command(response):
@@ -373,6 +365,17 @@ def chat():
                 settings["sudo_password"] = password
                 save_settings(settings)
                 console.print("[bold green]Senha sudo salva com sucesso em data/settings.json![/bold green]")
+                continue
+
+            # Novo comando para limpar a memória
+            if user_input.strip() == "/clearmem":
+                memory = {"notes": [], "last_interaction": ""}
+                save_memory(memory)
+                # Reinicializa a conversa para limpar o contexto do LLM
+                current_memory_text = json.dumps(memory, indent=2, ensure_ascii=False)
+                system_message = f"{SYSTEM_PROMPT}\n\nMEMÓRIA ATUAL:\n{current_memory_text}"
+                messages = [{'role': 'system', 'content': system_message}]
+                console.print("[bold green]Memória persistente e histórico da conversa foram limpos![/bold green]")
                 continue
 
             messages.append({'role': 'user', 'content': user_input})
