@@ -211,8 +211,18 @@ def chat():
                 model_names.append(m.name)
 
         if OLLAMA_MODEL not in model_names and (OLLAMA_MODEL + ":latest") not in model_names:
-            console.print(Panel(f"[bold red]Aviso:[/bold red] O modelo '[bold cyan]{OLLAMA_MODEL}[/bold cyan]' não foi encontrado.\n\nPor favor, baixe-o manualmente no terminal com:\n[bold green]ollama pull {OLLAMA_MODEL}[/bold green]", title="Modelo Ausente", border_style="yellow"))
-            return
+            if model_names:
+                console.print(Panel(f"[bold yellow]Aviso:[/bold yellow] O modelo '[bold cyan]{OLLAMA_MODEL}[/bold cyan]' não foi encontrado.\n\n[bold]Modelos disponíveis detectados:[/bold]\n" + "\n".join([f"- {m}" for m in model_names]) + "\n\nDigite o nome de um modelo acima para usar agora ou pressione Enter para sair:", title="Modelo Ausente", border_style="yellow"))
+                choice = console.input("[bold blue]Sua escolha:[/bold blue] ").strip()
+                if choice in model_names or (choice + ":latest") in model_names:
+                    OLLAMA_MODEL = choice
+                    config["model"] = OLLAMA_MODEL
+                    save_config(config)
+                else:
+                    return
+            else:
+                console.print(Panel(f"[bold red]Aviso:[/bold red] Nenhum modelo foi encontrado no seu Ollama.\n\nPor favor, baixe um modelo primeiro no terminal com:\n[bold green]ollama pull llama3[/bold green] (ou o modelo de sua preferência)", title="Nenhum Modelo Encontrado", border_style="red"))
+                return
     except Exception as e:
         console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando no servidor.", title="Erro Crítico", border_style="red"))
         return
