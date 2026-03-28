@@ -139,6 +139,19 @@ def chat():
     # Verifica atualizações ao iniciar
     check_for_updates()
     
+    # Verifica se o Ollama está acessível e se o modelo existe
+    try:
+        models = ollama.list()
+        model_names = [m['name'] for m in models['models']]
+        if 'llama3:latest' not in model_names and 'llama3' not in model_names:
+            console.print("[bold yellow]Aviso:[/bold yellow] Modelo 'llama3' não encontrado localmente.")
+            with console.status("[bold cyan]Baixando llama3 (isso pode demorar)...[/bold cyan]"):
+                ollama.pull('llama3')
+                console.print("[bold green]Modelo llama3 baixado com sucesso![/bold green]")
+    except Exception as e:
+        console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando no servidor.", title="Erro Crítico", border_style="red"))
+        return
+
     console.print(Panel("[bold green]Ollama Autônomo V2[/bold green]\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
     
     messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
@@ -186,9 +199,13 @@ def chat():
                 console.print("[bold red]Aviso:[/bold red] Limite de etapas atingido.")
 
         except KeyboardInterrupt:
+            console.print("\n[bold yellow]Interrompido pelo usuário. Saindo...[/bold yellow]")
             break
         except Exception as e:
             console.print(f"[bold red]Erro:[/bold red] {e}")
 
 if __name__ == "__main__":
-    chat()
+    try:
+        chat()
+    finally:
+        pygame.mixer.quit()
