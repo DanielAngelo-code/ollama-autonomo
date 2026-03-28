@@ -118,13 +118,19 @@ def speak(text):
                     console.print(f"[dim red](Murf.ai Erro Detalhado: {error_detail})[/dim red]")
                 except:
                     console.print(f"[dim red](Murf.ai Erro HTTP {response.status_code})[/dim red]")
+                return # Sai da função se houver erro na API
+
             response.raise_for_status()
-            audio_url = response.json().get("audioUrl")
+            data = response.json()
+            audio_url = data.get("audioUrl")
 
             if audio_url:
                 # Download do áudio temporário
-                audio_data = requests.get(audio_url).content
-                temp_file = "temp_voice.mp3"
+                audio_res = requests.get(audio_url)
+                audio_res.raise_for_status()
+                audio_data = audio_res.content
+                
+                temp_file = os.path.join(DATA_DIR, "temp_voice.mp3")
                 with open(temp_file, "wb") as f:
                     f.write(audio_data)
 
@@ -135,7 +141,10 @@ def speak(text):
                     time.sleep(0.1)
                 
                 pygame.mixer.music.unload()
-                os.remove(temp_file)
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            else:
+                console.print(f"[dim red](Murf.ai não retornou URL de áudio: {data})[/dim red]")
     except Exception as e:
         console.print(f"[dim red](Erro ao gerar voz: {e})[/dim red]")
 
