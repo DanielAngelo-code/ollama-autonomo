@@ -13,6 +13,8 @@ from rich.markdown import Markdown
 from rich.live import Live
 from rich.text import Text
 
+console = Console()
+
 # Configurações Persistentes (Localizadas na pasta /data)
 DATA_DIR = "data"
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
@@ -80,8 +82,6 @@ MURF_VOICE_ID = settings["voice_id"]
 MURF_STYLE = settings["voice_style"]
 MURF_MODEL_VERSION = "GEN2"
 OLLAMA_MODEL = settings["ollama_model"]
-
-console = Console()
 
 # Inicializa mixer de áudio
 pygame.mixer.init()
