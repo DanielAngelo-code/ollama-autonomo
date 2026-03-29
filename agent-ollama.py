@@ -67,16 +67,20 @@ def is_process_running(pid):
 
 def check_instance_lock():
     """Verifica se já existe uma instância rodando e cria o arquivo de trava."""
+    pid_active = False
     if os.path.exists(LOCK_FILE):
         try:
             with open(LOCK_FILE, "r") as f:
                 pid = int(f.read().strip())
             if is_process_running(pid):
+                pid_active = True
                 console.print(f"[bold red]Erro:[/bold red] Já existe uma instância do {AGENT_NAME} rodando (PID: {pid}).")
                 console.print("[yellow]Se você tem certeza que não há outra instância, delete o arquivo 'data/agent.lock'.[/yellow]")
-                sys.exit(1)
         except (ValueError, IOError):
             pass # Arquivo corrompido ou ilegível, vamos sobrescrever
+
+    if pid_active:
+        sys.exit(1)
 
     # Cria o novo lock file
     with open(LOCK_FILE, "w") as f:
@@ -729,15 +733,19 @@ if __name__ == "__main__":
         if len(sys.argv) > 1 and sys.argv[1] == "start":
             # Verifica se já existe algo rodando ANTES de tentar iniciar outro
             if os.path.exists(LOCK_FILE):
+                pid_active = False
                 try:
                     with open(LOCK_FILE, "r") as f:
                         pid = int(f.read().strip())
                     if is_process_running(pid):
+                        pid_active = True
                         console.print(f"[bold red]Erro:[/bold red] O {AGENT_NAME} já está rodando em segundo plano (PID: {pid}).")
                         console.print("[yellow]Use 'agent-ollama stop' para encerrar antes de iniciar novamente.[/yellow]")
-                        sys.exit(1)
-                except:
+                except (ValueError, IOError):
                     pass
+                
+                if pid_active:
+                    sys.exit(1)
 
             if not settings.get("discord_token") or not settings.get("discord_enabled"):
                 console.print("[bold red]Erro:[/bold red] Discord não está configurado ou habilitado. Use 'agent-ollama config' primeiro.")
