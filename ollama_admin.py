@@ -80,7 +80,7 @@ if not settings["murf_api_key"]:
 
 # Configurações Murf.ai
 MURF_API_KEY = settings["murf_api_key"]
-MURF_VOICE_ID = "pt-BR-benicio-v2" # Formato atualizado da API para vozes v2
+MURF_VOICE_ID = "pt-BR-benício" # ID exato encontrado na biblioteca da API (com acento)
 MURF_STYLE = "Conversational"
 MURF_MODEL_VERSION = "GEN2"
 OLLAMA_MODEL = settings["ollama_model"]
