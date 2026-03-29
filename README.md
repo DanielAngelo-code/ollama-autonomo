@@ -48,14 +48,20 @@ Gerencie seu servidor Ubuntu através de conversas em linguagem natural com o Ol
    ```
 
 3. **Configurar Comando Global**:
-   Para chamar o assistente de qualquer lugar usando apenas `ollama-admin`:
-   ```bash
-   # Dê permissão ao script de entrada
-   chmod +x ollama-admin.sh
-   
-   # Crie um link simbólico no seu bin (as aspas são importantes se o seu caminho tiver espaços!)
-   sudo ln -s "$(pwd)/ollama-admin.sh" /usr/local/bin/ollama-admin
-   ```
+   - **No Linux/Ubuntu:**
+     Para chamar o assistente de qualquer lugar usando apenas `ollama-admin`:
+     ```bash
+     # Dê permissão ao script de entrada
+     chmod +x ollama-admin.sh
+     
+     # Crie um link simbólico no seu bin (as aspas são importantes se o seu caminho tiver espaços!)
+     sudo ln -s "$(pwd)/ollama-admin.sh" /usr/local/bin/ollama-admin
+     ```
+   - **No Windows:**
+     No Windows, o comando `sudo ln` não funciona. Para rodar o assistente, use:
+     ```powershell
+     python ollama_admin.py
+     ```
 
 ## 📖 Como Usar
 
