@@ -183,13 +183,31 @@ async def run_discord_bot():
         console.print("[red]Erro: Biblioteca 'discord.py' não encontrada. Instale com 'pip install discord.py'[/red]")
         return
 
-    intents = discord.Intents.default()
-    intents.message_content = True
+    intents = discord.Intents.all() # Usa todas as intents para garantir captura máxima
     bot = commands.Bot(command_prefix="!", intents=intents)
 
     @bot.event
     async def on_ready():
         console.print(f"[bold magenta][DISCORD][/bold magenta] Bot conectado como [bold]{bot.user}[/bold]!")
+        # Define status do bot
+        await bot.change_presence(activity=discord.Game(name="!cmd <prompt>"))
+
+    @bot.event
+    async def on_message(message):
+        # Loga qualquer mensagem que o bot veja (exceto as dele mesmo)
+        if message.author != bot.user:
+            console.print(f"[dim magenta][DISCORD DEBUG][/dim magenta] Mensagem vista em #[bold]{message.channel}[/bold] de [bold]{message.author}[/bold]: {message.content}")
+        
+        # Processa os comandos (importante quando se usa on_message)
+        await bot.process_commands(message)
+
+    @bot.event
+    async def on_command_error(ctx, error):
+        # Loga erros de comando
+        console.print(f"[bold red][DISCORD ERROR][/bold red] Erro no comando !{ctx.command}: {error}")
+        if isinstance(error, commands.CommandNotFound):
+            return # Ignora comandos não encontrados silenciosamente
+        await ctx.send(f"❌ Erro: {error}")
 
     @bot.command(name="cmd")
     async def cmd(ctx, *, prompt):
