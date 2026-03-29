@@ -43,6 +43,18 @@ O projeto agora possui um script de setup que faz tudo por você, incluindo a cr
    ./agent-setup.sh
    ```
 
+### Configurações Adicionais:
+Você pode configurar chaves de API, tokens do Discord e outras preferências usando o comando:
+```bash
+agent-ollama config
+```
+
+### Modo Segundo Plano (Bot Discord)
+Você pode iniciar o Ollie apenas como bot do Discord e deixá-lo rodando em segundo plano, mesmo após fechar o terminal:
+- **Iniciar**: `agent-ollama start`
+- **Acompanhar Logs**: `agent-ollama log`
+- **Parar**: `agent-ollama stop`
+
 ---
 
 ## 📖 Como Usar
@@ -60,6 +72,12 @@ agent-ollama
 - `/setsudo <senha>`: (Linux apenas) Salva a senha para comandos `sudo`.
 - `/clearmem`: Limpa a memória e o histórico.
 - `sair`, `exit` ou `quit`: Encerra o assistente.
+
+## 🤖 Integração com Discord
+1. Crie um Bot no [Discord Developer Portal](https://discord.com/developers/applications).
+2. Habilite a "Message Content Intent".
+3. Obtenha o Token e use `agent-ollama config` para salvá-lo e habilitar o bot.
+4. No Discord, use o comando `!cmd <seu pedido>` para falar com o Ollie remotamente.
 
 ## 🛡️ Segurança
 

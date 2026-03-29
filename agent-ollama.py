@@ -8,6 +8,8 @@ import os
 import platform
 import time
 import pygame
+import asyncio
+import atexit
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
@@ -36,9 +38,62 @@ SHELL_TYPE = "PowerShell" if IS_WINDOWS else "Bash"
 DATA_DIR = "data"
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 MEMORY_FILE = os.path.join(DATA_DIR, "memory.json")
+LOCK_FILE = os.path.join(DATA_DIR, "agent.lock")
+LOG_FILE = os.path.join(DATA_DIR, "agent.log")
 
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
+
+def is_process_running(pid):
+    """Verifica se um processo com o PID fornecido está ativo."""
+    if pid <= 0:
+        return False
+    if IS_WINDOWS:
+        try:
+            # No Windows, usamos tasklist para verificar se o PID existe
+            output = subprocess.check_output(["tasklist", "/FI", f"PID eq {pid}", "/NH"], text=True)
+            return str(pid) in output
+        except:
+            return False
+    else:
+        try:
+            # No Linux/Unix, sinal 0 apenas verifica a existência do processo
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
+
+def check_instance_lock():
+    """Verifica se já existe uma instância rodando e cria o arquivo de trava."""
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, "r") as f:
+                pid = int(f.read().strip())
+            if is_process_running(pid):
+                console.print(f"[bold red]Erro:[/bold red] Já existe uma instância do {AGENT_NAME} rodando (PID: {pid}).")
+                console.print("[yellow]Se você tem certeza que não há outra instância, delete o arquivo 'data/agent.lock'.[/yellow]")
+                sys.exit(1)
+        except (ValueError, IOError):
+            pass # Arquivo corrompido ou ilegível, vamos sobrescrever
+
+    # Cria o novo lock file
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    
+    # Garante a remoção ao sair
+    atexit.register(remove_instance_lock)
+
+def remove_instance_lock():
+    """Remove o arquivo de trava ao encerrar."""
+    if os.path.exists(LOCK_FILE):
+        try:
+            # Só remove se o PID no arquivo for o do processo atual
+            with open(LOCK_FILE, "r") as f:
+                pid = int(f.read().strip())
+            if pid == os.getpid():
+                os.remove(LOCK_FILE)
+        except:
+            pass
 
 def load_settings():
     """Carrega as configurações e chaves da pasta data."""
@@ -50,7 +105,9 @@ def load_settings():
         "voice_style": "Conversational",
         "sudo_password": "",
         "show_thoughts": False,
-        "tts_enabled": False
+        "tts_enabled": False,
+        "discord_token": "",
+        "discord_enabled": False
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -89,8 +146,8 @@ def save_memory(memory):
 settings = load_settings()
 memory = load_memory()
 
-# Solicita a chave Murf.ai se não estiver presente
-if not settings["murf_api_key"]:
+# Solicita a chave Murf.ai se não estiver presente (apenas se não estiver no modo config)
+if not settings["murf_api_key"] and not (len(sys.argv) > 1 and sys.argv[1] == "config"):
     console.print(Panel("[bold yellow]Configuração Inicial do Murf.ai[/bold yellow]\nNenhuma chave de API encontrada na pasta /data.\n\nVocê pode colar sua chave agora ou pressionar Enter para continuar sem voz.", title="Ação Necessária"))
     key = console.input("[bold cyan]Chave Murf.ai (ap2_...): [/bold cyan]").strip()
     if key:
@@ -108,7 +165,58 @@ OLLAMA_MODEL = settings["ollama_model"]
 # Inicializa mixer de áudio
 pygame.mixer.init()
 
-def speak(text):
+# Variáveis globais para o bot do Discord
+discord_client = None
+
+async def run_discord_bot():
+    """Lógica básica para o bot do Discord."""
+    try:
+        import discord
+        from discord.ext import commands
+    except ImportError:
+        console.print("[red]Erro: Biblioteca 'discord.py' não encontrada. Instale com 'pip install discord.py'[/red]")
+        return
+
+    intents = discord.Intents.default()
+    intents.message_content = True
+    bot = commands.Bot(command_prefix="!", intents=intents)
+
+    @bot.event
+    async def on_ready():
+        console.print(f"[green]Bot Discord conectado como {bot.user}![/green]")
+
+    @bot.command(name="cmd")
+    async def cmd(ctx, *, prompt):
+        """Comando para enviar prompt para o Ollie via Discord."""
+        await ctx.send(f"🤖 **{AGENT_NAME}** está processando seu pedido...")
+        
+        # Simula o loop do chat, mas para o Discord
+        # (Isso é uma simplificação para não duplicar toda a lógica)
+        messages = [
+            {'role': 'system', 'content': f"{SYSTEM_PROMPT.format(user_name=ctx.author.name)}\n\n(AVISO: Você está respondendo via Discord)"},
+            {'role': 'user', 'content': prompt}
+        ]
+        
+        try:
+            response = ollama.chat(model=settings.get("ollama_model", DEFAULT_MODEL), messages=messages)
+            content = response['message']['content']
+            
+            # Divide a resposta se for muito longa para o Discord
+            if len(content) > 2000:
+                for i in range(0, len(content), 2000):
+                    await ctx.send(content[i:i+2000])
+            else:
+                await ctx.send(content)
+                
+        except Exception as e:
+            await ctx.send(f"❌ Erro ao processar pedido: {e}")
+
+    try:
+        await bot.start(settings["discord_token"])
+    except Exception as e:
+        console.print(f"[red]Erro ao iniciar bot Discord: {e}[/red]")
+
+async def speak(text):
     """Envia o texto para murf.ai e reproduz o áudio resultante."""
     # Verifica se o TTS está habilitado nas configurações
     if not settings.get("tts_enabled", False):
@@ -136,7 +244,7 @@ def speak(text):
 
     try:
         with console.status("[bold magenta]Gerando voz (Murf.ai)...[/bold magenta]"):
-            response = requests.post(url, headers=headers, json=payload)
+            response = await asyncio.to_thread(requests.post, url, headers=headers, json=payload)
             if response.status_code != 200:
                 try:
                     error_detail = response.json()
@@ -152,7 +260,7 @@ def speak(text):
 
             if audio_url:
                 # Download do áudio temporário
-                audio_res = requests.get(audio_url)
+                audio_res = await asyncio.to_thread(requests.get, audio_url)
                 audio_res.raise_for_status()
                 audio_data = audio_res.content
                 
@@ -164,7 +272,7 @@ def speak(text):
                 pygame.mixer.music.load(temp_file)
                 pygame.mixer.music.play()
                 while pygame.mixer.music.get_busy():
-                    time.sleep(0.1)
+                    await asyncio.sleep(0.1)
                 
                 pygame.mixer.music.unload()
                 if os.path.exists(temp_file):
@@ -272,8 +380,12 @@ def check_for_updates():
 # Configurações do Ollama
 DEFAULT_MODEL = "llama3"
 
-def chat():
+async def chat():
     global memory
+    # Inicia o bot do Discord se estiver habilitado e tiver token
+    if settings.get("discord_enabled") and settings.get("discord_token"):
+        asyncio.create_task(run_discord_bot())
+
     # Verifica atualizações ao iniciar
     check_for_updates()
     
@@ -301,7 +413,8 @@ def chat():
         if ollama_model not in model_names and (ollama_model + ":latest") not in model_names:
             if model_names:
                 console.print(Panel(f"[bold yellow]Aviso:[/bold yellow] O modelo '[bold cyan]{ollama_model}[/bold cyan]' não foi encontrado.\n\n[bold]Modelos disponíveis detectados:[/bold]\n" + "\n".join([f"- {m}" for m in model_names]) + "\n\nDigite o nome de um modelo acima para usar agora ou pressione Enter para sair:", title="Modelo Ausente", border_style="yellow"))
-                choice = console.input("[bold blue]Sua escolha:[/bold blue] ").strip()
+                choice = await asyncio.to_thread(console.input, "[bold blue]Sua escolha:[/bold blue] ")
+                choice = choice.strip()
                 if choice in model_names or (choice + ":latest") in model_names:
                     ollama_model = choice
                     settings["ollama_model"] = ollama_model
@@ -328,7 +441,7 @@ def chat():
     while True:
         try:
             current_user = settings.get("user_name", "Usuário")
-            user_input = console.input(f"[bold blue]{current_user}:[/bold blue] ")
+            user_input = await asyncio.to_thread(console.input, f"[bold blue]{current_user}:[/bold blue] ")
             
             if user_input.lower() in ["sair", "exit", "quit"]:
                 break
@@ -375,7 +488,7 @@ def chat():
                     try:
                         url = "https://api.murf.ai/v1/speech/voices"
                         headers = {"api-key": MURF_API_KEY}
-                        response = requests.get(url, headers=headers)
+                        response = await asyncio.to_thread(requests.get, url, headers=headers)
                         response.raise_for_status()
                         voices = response.json()
                         pt_voices = [v for v in voices if v.get('locale') == 'pt-BR']
@@ -434,14 +547,14 @@ def chat():
                 
                 if show_thoughts:
                     with Live(Text(status_text, style="bold yellow"), refresh_per_second=10) as live:
-                        response_gen = ollama.chat(model=ollama_model, messages=messages, stream=True)
+                        response_gen = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages, stream=True)
                         for chunk in response_gen:
                             content = chunk['message']['content']
                             full_response += content
                             live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
                 else:
                     with console.status(f"[bold yellow]{status_text}[/bold yellow]"):
-                        response = ollama.chat(model=ollama_model, messages=messages)
+                        response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages)
                         full_response = response['message']['content']
                 
                 llm_response = full_response
@@ -482,7 +595,7 @@ def chat():
                     step_count += 1
                     if summary:
                         console.print(f"[italic yellow]→ {summary}[/italic yellow]")
-                        speak(summary)
+                        await speak(summary)
                     
                     console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
                     stdout, stderr, code = execute_command(command)
@@ -496,7 +609,7 @@ def chat():
                     continue
                 else:
                     console.print(Panel(Markdown(llm_response), border_style="green", title="Tarefa Concluída"))
-                    speak(llm_response)
+                    await speak(llm_response)
                     break
             
             if step_count >= max_steps:
@@ -510,6 +623,144 @@ def chat():
 
 if __name__ == "__main__":
     try:
-        chat()
+        # Modo de configuração
+        if len(sys.argv) > 1 and sys.argv[1] == "config":
+            console.print(Panel("[bold cyan]Agent Ollie - Modo de Configuração[/bold cyan]", border_style="cyan"))
+            
+            # Menu de configuração
+            while True:
+                console.print("\n[bold]Selecione o que deseja configurar:[/bold]")
+                console.print("1. Nome do Usuário")
+                console.print("2. Modelo do Ollama")
+                console.print("3. Chave API Murf.ai")
+                console.print("4. Token do Bot Discord")
+                console.print("5. Habilitar/Desabilitar Discord")
+                console.print("6. Senha Sudo (Linux)")
+                console.print("0. Sair e Salvar")
+                
+                opcao = console.input("\n[bold yellow]Opção: [/bold yellow]").strip()
+                
+                if opcao == "1":
+                    settings["user_name"] = console.input(f"Novo nome (atual: {settings['user_name']}): ").strip() or settings["user_name"]
+                elif opcao == "2":
+                    settings["ollama_model"] = console.input(f"Novo modelo (atual: {settings['ollama_model']}): ").strip() or settings["ollama_model"]
+                elif opcao == "3":
+                    settings["murf_api_key"] = console.input(f"Nova chave Murf.ai (atual: {settings['murf_api_key'][:10]}...): ").strip() or settings["murf_api_key"]
+                elif opcao == "4":
+                    settings["discord_token"] = console.input(f"Novo Token Discord (atual: {settings['discord_token'][:10]}...): ").strip() or settings["discord_token"]
+                elif opcao == "5":
+                    estado = "habilitado" if settings["discord_enabled"] else "desabilitado"
+                    confirm = console.input(f"Discord está {estado}. Deseja trocar? (s/n): ").lower().strip()
+                    if confirm == 's':
+                        settings["discord_enabled"] = not settings["discord_enabled"]
+                elif opcao == "6":
+                    if IS_WINDOWS:
+                        console.print("[red]Sudo não é usado no Windows.[/red]")
+                    else:
+                        settings["sudo_password"] = console.input("Nova senha sudo: ").strip() or settings["sudo_password"]
+                elif opcao == "0":
+                    save_settings(settings)
+                    console.print("[green]Configurações salvas![/green]")
+                    sys.exit(0)
+                
+                save_settings(settings)
+
+        # Iniciar bot em segundo plano
+        if len(sys.argv) > 1 and sys.argv[1] == "start":
+            # Aqui não chamamos check_instance_lock() porque o processo que ele vai disparar é que deve travar
+            if not settings.get("discord_token") or not settings.get("discord_enabled"):
+                console.print("[bold red]Erro:[/bold red] Discord não está configurado ou habilitado. Use 'agent-ollama config' primeiro.")
+                sys.exit(1)
+            
+            console.print(f"[bold green]Iniciando {AGENT_NAME} em segundo plano...[/bold green]")
+            
+            script_path = os.path.abspath(__file__)
+            python_exe = sys.executable
+            
+            if IS_WINDOWS:
+                # No Windows, usamos pythonw para não abrir janela de terminal
+                # Se não houver pythonw, usamos python normal com flags de criação de processo
+                pythonw_exe = python_exe.replace("python.exe", "pythonw.exe")
+                if not os.path.exists(pythonw_exe):
+                    pythonw_exe = python_exe
+                
+                # Redirecionamos a saída para o LOG_FILE no Windows também
+                # (Isso é um pouco mais complexo no Windows sem abrir janela, mas possível via shell redirection)
+                subprocess.Popen(
+                    f'"{pythonw_exe}" "{script_path}" run-bot >> "{LOG_FILE}" 2>&1',
+                    shell=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                    close_fds=True
+                )
+            else:
+                # No Linux, usamos nohup e redirecionamos saída
+                with open(LOG_FILE, "a") as f:
+                    subprocess.Popen(
+                        [python_exe, script_path, "run-bot"],
+                        stdout=f,
+                        stderr=f,
+                        preexec_fn=os.setpgrp
+                    )
+            
+            console.print("[bold cyan]Ollie agora está rodando em segundo plano. Você pode fechar este terminal.[/bold cyan]")
+            sys.exit(0)
+
+        # Modo apenas bot (usado pelo comando 'start')
+        if len(sys.argv) > 1 and sys.argv[1] == "run-bot":
+            check_instance_lock()
+            async def run_only_bot():
+                await run_discord_bot()
+                while True: # Mantém o processo vivo
+                    await asyncio.sleep(3600)
+            asyncio.run(run_only_bot())
+            sys.exit(0)
+        
+        # Comando para acompanhar os logs em tempo real
+        if len(sys.argv) > 1 and sys.argv[1] == "log":
+            if not os.path.exists(LOG_FILE):
+                console.print(f"[bold red]Erro:[/bold red] Arquivo de log não encontrado em {LOG_FILE}")
+                sys.exit(1)
+            
+            console.print(f"[bold cyan]Acompanhando logs de {AGENT_NAME} (Ctrl+C para sair):[/bold cyan]\n")
+            
+            try:
+                # No Windows e Linux, podemos ler o arquivo continuamente
+                with open(LOG_FILE, "r") as f:
+                    # Vai para o final do arquivo primeiro
+                    f.seek(0, os.SEEK_END)
+                    while True:
+                        line = f.readline()
+                        if not line:
+                            time.sleep(0.1)
+                            continue
+                        print(line, end="")
+            except KeyboardInterrupt:
+                console.print("\n[bold yellow]Saindo do log...[/bold yellow]")
+                sys.exit(0)
+
+        # Comando para encerrar o bot em segundo plano
+        if len(sys.argv) > 1 and sys.argv[1] == "stop":
+            console.print(f"[bold yellow]Encerrando instâncias do {AGENT_NAME}...[/bold yellow]")
+            if IS_WINDOWS:
+                # No Windows, usamos taskkill para matar processos pythonw que estão rodando o script
+                subprocess.run(["taskkill", "/F", "/IM", "pythonw.exe", "/T"], capture_output=True)
+                # Também tentamos matar pelo nome do script para garantir
+                subprocess.run(["powershell", "-Command", f"Get-Process | Where-Object {{ $_.CommandLine -like '*{AGENT_NAME}*' }} | Stop-Process -Force"], capture_output=True)
+            else:
+                # No Linux, usamos pkill
+                subprocess.run(["pkill", "-f", "agent-ollama.py"])
+            
+            # Remove o lock file se existir (já que estamos forçando a parada)
+            if os.path.exists(LOCK_FILE):
+                os.remove(LOCK_FILE)
+
+            console.print("[bold green]Instâncias encerradas![/bold green]")
+            sys.exit(0)
+
+        # Se chegou aqui, é o modo interativo normal
+        check_instance_lock()
+        asyncio.run(chat())
+    except KeyboardInterrupt:
+        pass
     finally:
         pygame.mixer.quit()
