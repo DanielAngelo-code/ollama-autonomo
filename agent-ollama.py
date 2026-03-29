@@ -192,13 +192,49 @@ async def run_discord_bot():
         # Define status do bot
         await bot.change_presence(activity=discord.Game(name="!cmd <prompt>"))
 
+    async def handle_discord_prompt(ctx, prompt):
+        """Função centralizada para processar prompts vindos do Discord."""
+        console.print(f"[bold magenta][DISCORD][/bold magenta] Mensagem de [bold]{ctx.author.name}[/bold]: {prompt}")
+        
+        messages = [
+            {'role': 'system', 'content': f"{SYSTEM_PROMPT.format(user_name=ctx.author.name)}\n\n(AVISO: Você está respondendo via Discord)"},
+            {'role': 'user', 'content': prompt}
+        ]
+        
+        try:
+            async with ctx.typing():
+                ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
+                final_response, _ = await process_multi_step_task(messages, ollama_model, is_discord=True, ctx=ctx)
+                
+                console.print(f"[bold magenta][DISCORD][/bold magenta] Ollie respondeu a {ctx.author.name}")
+                
+                if final_response:
+                    if len(final_response) > 2000:
+                        for i in range(0, len(final_response), 2000):
+                            await ctx.send(final_response[i:i+2000])
+                    else:
+                        await ctx.send(final_response)
+                else:
+                    await ctx.send("✅ Tarefa concluída.")
+        except Exception as e:
+            console.print(f"[bold red][DISCORD ERROR] Erro ao processar pedido de {ctx.author.name}: {e}[/bold red]")
+            await ctx.send(f"❌ Erro ao processar pedido: {e}")
+
     @bot.event
     async def on_message(message):
-        # Loga qualquer mensagem que o bot veja (exceto as dele mesmo)
-        if message.author != bot.user:
-            console.print(f"[dim magenta][DISCORD DEBUG][/dim magenta] Mensagem vista em #[bold]{message.channel}[/bold] de [bold]{message.author}[/bold]: {message.content}")
-        
-        # Processa os comandos (importante quando se usa on_message)
+        # Ignora mensagens do próprio bot
+        if message.author == bot.user:
+            return
+
+        # Log de debug para ver o que o bot está recebendo
+        console.print(f"[dim magenta][DISCORD DEBUG][/dim magenta] Mensagem vista em #[bold]{message.channel}[/bold] de [bold]{message.author}[/bold]: {message.content}")
+
+        # Se for Mensagem Direta (DM) e não for um comando (!), processa como prompt automático
+        if isinstance(message.channel, discord.DMChannel) and not message.content.startswith("!"):
+            await handle_discord_prompt(message.channel, message.content)
+            return
+
+        # Processa os comandos (importante para o prefixo !cmd funcionar em canais)
         await bot.process_commands(message)
 
     @bot.event
@@ -212,38 +248,7 @@ async def run_discord_bot():
     @bot.command(name="cmd")
     async def cmd(ctx, *, prompt):
         """Comando para enviar prompt para o Ollie via Discord."""
-        # Log da interação no terminal/arquivo de log
-        console.print(f"[bold magenta][DISCORD][/bold magenta] Mensagem de [bold]{ctx.author.name}[/bold]: {prompt}")
-        
-        # Simula o loop do chat, mas para o Discord
-        messages = [
-            {'role': 'system', 'content': f"{SYSTEM_PROMPT.format(user_name=ctx.author.name)}\n\n(AVISO: Você está respondendo via Discord)"},
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        try:
-            # Mostra que está trabalhando imediatamente no Discord
-            async with ctx.typing():
-                # Chama o processador de tarefas multi-etapa
-                ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
-                final_response, _ = await process_multi_step_task(messages, ollama_model, is_discord=True, ctx=ctx)
-                
-                # Log da resposta final no terminal
-                console.print(f"[bold magenta][DISCORD][/bold magenta] Ollie respondeu a {ctx.author.name}")
-                
-                # Envia a resposta final
-                if final_response:
-                    if len(final_response) > 2000:
-                        for i in range(0, len(final_response), 2000):
-                            await ctx.send(final_response[i:i+2000])
-                    else:
-                        await ctx.send(final_response)
-                else:
-                    await ctx.send("✅ Tarefa concluída.")
-                
-        except Exception as e:
-            console.print(f"[bold red][DISCORD] Erro ao processar pedido de {ctx.author.name}: {e}[/bold red]")
-            await ctx.send(f"❌ Erro ao processar pedido: {e}")
+        await handle_discord_prompt(ctx, prompt)
 
     try:
         await bot.start(settings["discord_token"])
