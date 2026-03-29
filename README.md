@@ -26,7 +26,7 @@ Gerencie seu servidor Ubuntu através de conversas em linguagem natural com o Ol
 
 1. Clone o repositório:
    ```bash
-   git clone https://github.com/seu-usuario/ollama-autonomo.git
+   git clone https://github.com/DanielAngelo-code/ollama-autonomo.git
    cd ollama-autonomo
    ```
 

@@ -123,7 +123,8 @@ def speak(text):
 
             response.raise_for_status()
             data = response.json()
-            audio_url = data.get("audioUrl")
+            # A API pode retornar a URL no campo 'audioFile' ou 'audioUrl'
+            audio_url = data.get("audioUrl") or data.get("audioFile")
 
             if audio_url:
                 # Download do áudio temporário
