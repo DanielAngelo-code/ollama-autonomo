@@ -78,9 +78,10 @@ if not settings["murf_api_key"]:
         save_settings(settings)
         console.print("[bold green]Chave salva com sucesso em data/settings.json![/bold green]")
 
+# Configurações Murf.ai
 MURF_API_KEY = settings["murf_api_key"]
-MURF_VOICE_ID = settings["voice_id"]
-MURF_STYLE = settings["voice_style"]
+MURF_VOICE_ID = "pt-BR-benicio-v2" # Formato atualizado da API para vozes v2
+MURF_STYLE = "Conversational"
 MURF_MODEL_VERSION = "GEN2"
 OLLAMA_MODEL = settings["ollama_model"]
 
