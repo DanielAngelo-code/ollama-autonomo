@@ -188,25 +188,26 @@ async def run_discord_bot():
     @bot.command(name="cmd")
     async def cmd(ctx, *, prompt):
         """Comando para enviar prompt para o Ollie via Discord."""
-        await ctx.send(f"🤖 **{AGENT_NAME}** está processando seu pedido...")
-        
         # Simula o loop do chat, mas para o Discord
-        # (Isso é uma simplificação para não duplicar toda a lógica)
         messages = [
             {'role': 'system', 'content': f"{SYSTEM_PROMPT.format(user_name=ctx.author.name)}\n\n(AVISO: Você está respondendo via Discord)"},
             {'role': 'user', 'content': prompt}
         ]
         
         try:
-            response = ollama.chat(model=settings.get("ollama_model", DEFAULT_MODEL), messages=messages)
-            content = response['message']['content']
+            # Chama o processador de tarefas multi-etapa
+            ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
+            final_response, _ = await process_multi_step_task(messages, ollama_model, is_discord=True, ctx=ctx)
             
-            # Divide a resposta se for muito longa para o Discord
-            if len(content) > 2000:
-                for i in range(0, len(content), 2000):
-                    await ctx.send(content[i:i+2000])
+            # Envia a resposta final
+            if final_response:
+                if len(final_response) > 2000:
+                    for i in range(0, len(final_response), 2000):
+                        await ctx.send(final_response[i:i+2000])
+                else:
+                    await ctx.send(final_response)
             else:
-                await ctx.send(content)
+                await ctx.send("✅ Tarefa concluída.")
                 
         except Exception as e:
             await ctx.send(f"❌ Erro ao processar pedido: {e}")
@@ -354,31 +355,161 @@ def execute_command(command):
         return "", str(e), 1
 
 def check_for_updates():
-    """Verifica se há atualizações no repositório git e as aplica."""
+    """Verifica se há atualizações no repositório git e retorna informações sobre elas."""
     try:
-        # Verifica se estamos em um repositório git
         if not os.path.exists(".git"):
-            return False
+            return None
 
         with console.status("[bold blue]Verificando atualizações...[/bold blue]"):
-            # Faz um fetch para ver se há mudanças
             subprocess.run(["git", "fetch"], capture_output=True, check=True)
             status = subprocess.run(["git", "status", "-uno"], capture_output=True, text=True, check=True)
             
             if "Your branch is behind" in status.stdout:
-                console.print("[bold yellow]Nova atualização encontrada! Aplicando...[/bold yellow]")
-                subprocess.run(["git", "pull"], capture_output=True, check=True)
-                console.print("[bold green]Projeto atualizado com sucesso! Reinicie para aplicar.[/bold green]")
-                return True
+                # Pega o log das mudanças pendentes
+                log = subprocess.run(["git", "log", "..@{u}", "--oneline"], capture_output=True, text=True).stdout
+                diff = subprocess.run(["git", "diff", "..@{u}", "--stat"], capture_output=True, text=True).stdout
+                return {"log": log, "diff": diff}
             else:
                 console.print("[dim cyan]O projeto já está na versão mais recente.[/dim cyan]")
-                return False
+                return None
     except Exception as e:
         console.print(f"[dim red](Erro ao verificar atualizações: {e})[/dim red]")
-        return False
+        return None
+
+async def handle_update_decision(update_info):
+    """Usa o LLM como um agente separado para decidir se deve atualizar."""
+    ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
+    
+    update_agent_prompt = f"""
+    Você é o 'Agente de Atualização' do projeto Agent Ollie.
+    Sua única tarefa é analisar as mudanças pendentes no repositório e decidir se o projeto deve ser atualizado AGORA ou se deve AGUARDAR.
+
+    MUDANÇAS PENDENTES (Commits):
+    {update_info['log']}
+
+    ESTATÍSTICAS DE ARQUIVOS:
+    {update_info['diff']}
+
+    DIRETRIZES:
+    1. Se as mudanças parecerem críticas, melhorias de performance ou novas funcionalidades úteis, recomende ATUALIZAR.
+    2. Se parecerem instáveis ou se o usuário estiver no meio de uma tarefa importante, considere sugerir AGUARDAR.
+    3. Responda APENAS com um parágrafo curto justificando sua decisão e termine com 'DECISÃO: ATUALIZAR' ou 'DECISÃO: AGUARDAR'.
+    4. Responda em Português (Brasil).
+    """
+
+    try:
+        with console.status("[bold magenta]Update Agent analisando mudanças...[/bold magenta]"):
+            response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=[{'role': 'user', 'content': update_agent_prompt}])
+            content = response['message']['content']
+            
+            console.print(Panel(content, title="Update Agent - Recomendação", border_style="magenta"))
+            
+            if "DECISÃO: ATUALIZAR" in content:
+                confirm = await asyncio.to_thread(console.input, "[bold yellow]O Agente recomenda atualizar. Aplicar agora? (s/n): [/bold yellow]")
+                if confirm.lower() == 's':
+                    with console.status("[bold green]Aplicando atualização...[/bold green]"):
+                        subprocess.run(["git", "pull"], capture_output=True, check=True)
+                        console.print("[bold green]Projeto atualizado com sucesso! Reinicie o programa para aplicar as mudanças.[/bold green]")
+                        sys.exit(0)
+            else:
+                console.print("[yellow]Atualização adiada conforme recomendação do Agente.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Erro na decisão de atualização: {e}[/red]")
 
 # Configurações do Ollama
 DEFAULT_MODEL = "llama3"
+
+async def process_multi_step_task(messages, ollama_model, is_discord=False, ctx=None):
+    """Processa uma tarefa que pode envolver múltiplas etapas de execução de comandos."""
+    step_count = 0
+    max_steps = 10
+    final_response = ""
+
+    while step_count < max_steps:
+        full_response = ""
+        show_thoughts = settings.get("show_thoughts", False)
+        status_text = f"{AGENT_NAME} ({ollama_model}) pensando..."
+        
+        if is_discord:
+            async with ctx.typing():
+                response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages)
+                full_response = response['message']['content']
+        else:
+            if show_thoughts:
+                with Live(Text(status_text, style="bold yellow"), refresh_per_second=10) as live:
+                    response_gen = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages, stream=True)
+                    for chunk in response_gen:
+                        content = chunk['message']['content']
+                        full_response += content
+                        live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
+            else:
+                with console.status(f"[bold yellow]{status_text}[/bold yellow]"):
+                    response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages)
+                    full_response = response['message']['content']
+        
+        llm_response = full_response
+        messages.append({'role': 'assistant', 'content': llm_response})
+        
+        # Processa configurações embutidas no texto
+        if "# CONFIG: SHOW_THOUGHTS=True" in llm_response:
+            settings["show_thoughts"] = True
+            save_settings(settings)
+            if not is_discord: console.print("[bold magenta]Modo de visualização de pensamentos ativado.[/bold magenta]")
+        elif "# CONFIG: SHOW_THOUGHTS=False" in llm_response:
+            settings["show_thoughts"] = False
+            save_settings(settings)
+            if not is_discord: console.print("[bold magenta]Modo de visualização de pensamentos desativado.[/bold magenta]")
+        
+        if "# CONFIG: TTS_ENABLED=True" in llm_response:
+            settings["tts_enabled"] = True
+            save_settings(settings)
+            if not is_discord: console.print("[bold magenta]Saída de voz (TTS) ativada.[/bold magenta]")
+        elif "# CONFIG: TTS_ENABLED=False" in llm_response:
+            settings["tts_enabled"] = False
+            save_settings(settings)
+            if not is_discord: console.print("[bold magenta]Saída de voz (TTS) desativada.[/bold magenta]")
+        
+        user_name_match = re.search(r"# CONFIG: USER_NAME=(.*)", llm_response)
+        if user_name_match:
+            new_name = user_name_match.group(1).strip()
+            settings["user_name"] = new_name
+            save_settings(settings)
+            if not is_discord: console.print(f"[bold magenta]Nome do usuário alterado para: {new_name}[/bold magenta]")
+
+        command = extract_bash_command(llm_response)
+        summary = extract_summary(llm_response)
+
+        if command:
+            step_count += 1
+            if summary:
+                if is_discord:
+                    await ctx.send(f"⏳ **Etapa {step_count}:** {summary}")
+                else:
+                    console.print(f"[italic yellow]→ {summary}[/italic yellow]")
+                    await speak(summary)
+            
+            if not is_discord:
+                console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
+            
+            stdout, stderr, code = execute_command(command)
+            result_msg = f"RESULTADO DA ETAPA {step_count}:\nSTDOUT: {stdout}\nSTDERR: {stderr}\nEXIT_CODE: {code}"
+            
+            if len(result_msg) > 2000:
+                result_msg = result_msg[:1000] + "\n... (saída truncada por ser muito longa) ...\n" + result_msg[-1000:]
+            
+            messages.append({'role': 'user', 'content': result_msg})
+            continue
+        else:
+            final_response = llm_response
+            if not is_discord:
+                console.print(Panel(Markdown(llm_response), border_style="green", title="Tarefa Concluída"))
+                await speak(llm_response)
+            break
+            
+    if step_count >= max_steps and not is_discord:
+        console.print("[bold red]Aviso:[/bold red] Limite de etapas atingido.")
+    
+    return final_response, messages
 
 async def chat():
     global memory
@@ -386,8 +517,10 @@ async def chat():
     if settings.get("discord_enabled") and settings.get("discord_token"):
         asyncio.create_task(run_discord_bot())
 
-    # Verifica atualizações ao iniciar
-    check_for_updates()
+    # Verifica atualizações ao iniciar e lida com a decisão do Agente
+    update_info = check_for_updates()
+    if update_info:
+        await handle_update_decision(update_info)
     
     # Pega o modelo das configurações
     ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
@@ -536,84 +669,9 @@ async def chat():
 
             messages.append({'role': 'user', 'content': user_input})
             
-            step_count = 0
-            max_steps = 10
-
-            while step_count < max_steps:
-                full_response = ""
-                show_thoughts = settings.get("show_thoughts", False)
-                
-                status_text = f"Ollama ({ollama_model}) pensando..."
-                
-                if show_thoughts:
-                    with Live(Text(status_text, style="bold yellow"), refresh_per_second=10) as live:
-                        response_gen = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages, stream=True)
-                        for chunk in response_gen:
-                            content = chunk['message']['content']
-                            full_response += content
-                            live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
-                else:
-                    with console.status(f"[bold yellow]{status_text}[/bold yellow]"):
-                        response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages)
-                        full_response = response['message']['content']
-                
-                llm_response = full_response
-                messages.append({'role': 'assistant', 'content': llm_response})
-                
-                # Verifica se a IA quer alterar a configuração de exibição de pensamentos
-                if "# CONFIG: SHOW_THOUGHTS=True" in llm_response:
-                    settings["show_thoughts"] = True
-                    save_settings(settings)
-                    console.print("[bold magenta]Modo de visualização de pensamentos ativado.[/bold magenta]")
-                elif "# CONFIG: SHOW_THOUGHTS=False" in llm_response:
-                    settings["show_thoughts"] = False
-                    save_settings(settings)
-                    console.print("[bold magenta]Modo de visualização de pensamentos desativado.[/bold magenta]")
-                
-                # Verifica se a IA quer alterar a configuração do TTS
-                if "# CONFIG: TTS_ENABLED=True" in llm_response:
-                    settings["tts_enabled"] = True
-                    save_settings(settings)
-                    console.print("[bold magenta]Saída de voz (TTS) ativada.[/bold magenta]")
-                elif "# CONFIG: TTS_ENABLED=False" in llm_response:
-                    settings["tts_enabled"] = False
-                    save_settings(settings)
-                    console.print("[bold magenta]Saída de voz (TTS) desativada.[/bold magenta]")
-                
-                # Verifica se a IA quer alterar o nome do usuário
-                user_name_match = re.search(r"# CONFIG: USER_NAME=(.*)", llm_response)
-                if user_name_match:
-                    new_name = user_name_match.group(1).strip()
-                    settings["user_name"] = new_name
-                    save_settings(settings)
-                    console.print(f"[bold magenta]Nome do usuário alterado para: {new_name}[/bold magenta]")
-
-                command = extract_bash_command(llm_response)
-                summary = extract_summary(llm_response)
-
-                if command:
-                    step_count += 1
-                    if summary:
-                        console.print(f"[italic yellow]→ {summary}[/italic yellow]")
-                        await speak(summary)
-                    
-                    console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
-                    stdout, stderr, code = execute_command(command)
-                    
-                    result_msg = f"RESULTADO DA ETAPA {step_count}:\nSTDOUT: {stdout}\nSTDERR: {stderr}\nEXIT_CODE: {code}"
-                    
-                    if len(result_msg) > 2000:
-                        result_msg = result_msg[:1000] + "\n... (saída truncada por ser muito longa) ...\n" + result_msg[-1000:]
-                    
-                    messages.append({'role': 'user', 'content': result_msg})
-                    continue
-                else:
-                    console.print(Panel(Markdown(llm_response), border_style="green", title="Tarefa Concluída"))
-                    await speak(llm_response)
-                    break
-            
-            if step_count >= max_steps:
-                console.print("[bold red]Aviso:[/bold red] Limite de etapas atingido.")
+            # Chama o processador de tarefas multi-etapa
+            ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
+            await process_multi_step_task(messages, ollama_model, is_discord=False)
 
         except KeyboardInterrupt:
             console.print("\n[bold yellow]Interrompido pelo usuário. Saindo...[/bold yellow]")
