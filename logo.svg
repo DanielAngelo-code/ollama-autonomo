@@ -1,0 +1,37 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="90" fill="#0D1117" stroke="#00F2FF" stroke-width="4"/>
+  
+  <!-- Robot/Llama Head -->
+  <path d="M60 140 L140 140 L140 80 Q140 60 120 60 L80 60 Q60 60 60 80 Z" fill="#1F2937" stroke="#00F2FF" stroke-width="3"/>
+  
+  <!-- Ears (Llama Style) -->
+  <path d="M70 60 L65 40 Q63 35 68 35 L75 38 Z" fill="#1F2937" stroke="#00F2FF" stroke-width="2"/>
+  <path d="M130 60 L135 40 Q137 35 132 35 L125 38 Z" fill="#1F2937" stroke="#00F2FF" stroke-width="2"/>
+  
+  <!-- Eyes (Glowing Cyan) -->
+  <circle cx="85" cy="90" r="8" fill="#00F2FF">
+    <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="115" cy="90" r="8" fill="#00F2FF">
+    <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite" />
+  </circle>
+  
+  <!-- Mouth / Terminal Symbol -->
+  <path d="M85 115 L115 115" stroke="#00F2FF" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Terminal Brackets on sides -->
+  <text x="35" y="110" fill="#00F2FF" font-family="monospace" font-size="40" font-weight="bold">&lt;</text>
+  <text x="145" y="110" fill="#00F2FF" font-family="monospace" font-size="40" font-weight="bold">&gt;</text>
+  
+  <!-- Subtle Glow Effect -->
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>

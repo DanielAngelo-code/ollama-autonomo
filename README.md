@@ -1,5 +1,9 @@
 # Agent Ollama 🤖🚀
 
+<p align="center">
+  <img src="logo.svg" width="200" alt="Agent Ollama Logo">
+</p>
+
 Assistente de administração multiplataforma (Windows/Linux) que utiliza o Ollama para gerenciar seu sistema através de linguagem natural. Capaz de executar comandos PowerShell/Bash, analisar resultados e realizar tarefas multi-etapa de forma autônoma.
 
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
