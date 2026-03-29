@@ -5,6 +5,7 @@ import re
 import requests
 import json
 import os
+import platform
 import time
 import pygame
 from rich.console import Console
@@ -14,6 +15,11 @@ from rich.live import Live
 from rich.text import Text
 
 console = Console()
+
+# Detecção de Plataforma
+PLATFORM = platform.system()
+IS_WINDOWS = PLATFORM == "Windows"
+SHELL_TYPE = "PowerShell" if IS_WINDOWS else "Bash"
 
 # Configurações Persistentes (Localizadas na pasta /data)
 DATA_DIR = "data"
@@ -28,9 +34,10 @@ def load_settings():
     default_settings = {
         "murf_api_key": "",
         "ollama_model": "llama3",
-        "voice_id": "pt-BR-benicio",
+        "voice_id": "pt-BR-benício",
         "voice_style": "Conversational",
-        "sudo_password": ""
+        "sudo_password": "",
+        "show_thoughts": False
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -150,39 +157,49 @@ def speak(text):
     except Exception as e:
         console.print(f"[dim red](Erro ao gerar voz: {e})[/dim red]")
 
-SYSTEM_PROMPT = """
-Você é um assistente de administração para servidores Ubuntu e ambientes locais (PC).
-Sua missão é ajudar o usuário com as tarefas que ele solicitar, identificando o ambiente em que está rodando.
+SYSTEM_PROMPT = f"""
+Você é um assistente de administração multiplataforma ("Ollama Autônomo V2").
+Sua missão é ajudar o usuário com tarefas em Português (Brasil).
 
-DIRETRIZES:
-1. **Identificação de Ambiente**: Este projeto pode rodar tanto em um Servidor Ubuntu quanto em um PC local (Windows/Linux). Sempre verifique os comandos antes de sugerir para garantir compatibilidade.
-2. **Estilo de Resposta**: Responda de forma extremamente concisa e direta, no estilo de mensagens de WhatsApp. Evite textos longos, introduções formais ou conclusões desnecessárias.
-3. **Aguarde Instruções**: Não execute verificações ou comandos a menos que o usuário peça explicitamente.
-4. **Raciocínio Multi-etapa**: Se uma tarefa for complexa, execute uma etapa por vez e analise o resultado antes de prosseguir.
-5. **Execução de Comandos**: Para rodar um comando, descreva-o brevemente e use o bloco: ```bash\ncomando\n``` (para Linux/Server) ou o comando apropriado para o terminal atual.
-6. **Memória**: Você tem acesso a uma memória persistente em /data/memory.json. Use-a para entender preferências do usuário e histórico do projeto.
+AMBIENTE ATUAL: {PLATFORM} ({SHELL_TYPE})
+
+DIRETRIZES DE AMBIENTE (IMPORTANTE):
+1. **Windows (PowerShell)**: Use comandos nativos do PowerShell. NUNCA tente executar "Run as Administrator" ou "sudo". Se uma tarefa exigir privilégios elevados, explique ao usuário que ele deve rodar este script em um terminal elevado (Administrador).
+2. **Linux (Bash)**: Use comandos bash. Se precisar de sudo, use `sudo comando`. O script injetará a senha se disponível.
+3. **Caminhos**: SEMPRE use caminhos relativos ao projeto (ex: "./data/memory.json") ou caminhos absolutos com aspas se necessário. NUNCA tente escrever na raiz C:\\ diretamente no Windows ou em pastas de sistema sem permissão.
+4. **Idioma**: Responda SEMPRE em Português (Brasil).
+
+DIRETRIZES DE ESTILO:
+1. **Estilo WhatsApp**: Respostas extremamente curtas, diretas e sem formalidades.
+2. **Aguarde Instruções**: Só execute comandos se solicitado.
+3. **Raciocínio Multi-etapa**: Uma etapa por vez.
+4. **Execução**: Use ```bash\ncomando\n``` para comandos Linux ou ```powershell\ncomando\n``` para Windows.
+5. **Memória**: Localizada em ./data/memory.json. Use-a para guardar fatos importantes sobre o sistema.
+6. **Controle de Pensamentos**: Use ```bash\n# CONFIG: SHOW_THOUGHTS=True\n``` ou False para alternar o modo debug.
 """
 
 def extract_bash_command(response):
-    """Extrai o comando bash de dentro de blocos de código markdown."""
-    pattern = r"```(?:bash)?\n(.*?)\n```"
-    match = re.search(pattern, response, re.DOTALL)
+    """Extrai o comando bash/powershell de dentro de blocos de código markdown."""
+    pattern = r"```(?:bash|powershell|ps1|sh)?\n(.*?)\n```"
+    match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
     if match:
         return match.group(1).strip()
     return None
 
 def extract_summary(response):
     """Extrai o texto antes do bloco de código como resumo da ação."""
-    text = re.sub(r"```(?:bash)?\n.*?\n```", "", response, flags=re.DOTALL).strip()
+    text = re.sub(r"```(?:bash|powershell|ps1|sh)?\n.*?\n```", "", response, flags=re.DOTALL | re.IGNORECASE).strip()
     return text
 
 def execute_command(command):
     """Executa o comando no terminal e retorna a saída, lidando com sudo se necessário."""
     sudo_password = settings.get("sudo_password", "")
     
-    # Se o comando usa sudo e temos uma senha salva, injetamos a senha
-    if command.strip().startswith("sudo ") and sudo_password:
-        # Usamos 'sudo -S' para ler a senha do stdin
+    # No Windows, garantimos o uso do PowerShell se o comando não for explicitamente CMD
+    if IS_WINDOWS:
+        final_command = f'powershell -ExecutionPolicy Bypass -Command "{command.replace(\'"\', \'\\"\')}"'
+    elif command.strip().startswith("sudo ") and sudo_password:
+        # No Linux, usamos 'sudo -S' para ler a senha do stdin
         final_command = command.replace("sudo ", f"echo '{sudo_password}' | sudo -S ", 1)
     else:
         final_command = command
@@ -398,17 +415,35 @@ def chat():
 
             while step_count < max_steps:
                 full_response = ""
-                with Live(Text(f"Ollama ({OLLAMA_MODEL}) pensando...", style="bold yellow"), refresh_per_second=10) as live:
-                    response_gen = ollama.chat(model=OLLAMA_MODEL, messages=messages, stream=True)
-                    for chunk in response_gen:
-                        content = chunk['message']['content']
-                        full_response += content
-                        # Mostra o progresso em tempo real
-                        live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
+                show_thoughts = settings.get("show_thoughts", False)
+                
+                status_text = f"Ollama ({OLLAMA_MODEL}) pensando..."
+                
+                if show_thoughts:
+                    with Live(Text(status_text, style="bold yellow"), refresh_per_second=10) as live:
+                        response_gen = ollama.chat(model=OLLAMA_MODEL, messages=messages, stream=True)
+                        for chunk in response_gen:
+                            content = chunk['message']['content']
+                            full_response += content
+                            live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
+                else:
+                    with console.status(f"[bold yellow]{status_text}[/bold yellow]"):
+                        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
+                        full_response = response['message']['content']
                 
                 llm_response = full_response
                 messages.append({'role': 'assistant', 'content': llm_response})
                 
+                # Verifica se a IA quer alterar a configuração de exibição de pensamentos
+                if "# CONFIG: SHOW_THOUGHTS=True" in llm_response:
+                    settings["show_thoughts"] = True
+                    save_settings(settings)
+                    console.print("[bold magenta]Modo de visualização de pensamentos ativado.[/bold magenta]")
+                elif "# CONFIG: SHOW_THOUGHTS=False" in llm_response:
+                    settings["show_thoughts"] = False
+                    save_settings(settings)
+                    console.print("[bold magenta]Modo de visualização de pensamentos desativado.[/bold magenta]")
+
                 command = extract_bash_command(llm_response)
                 summary = extract_summary(llm_response)
 
