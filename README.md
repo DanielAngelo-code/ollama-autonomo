@@ -1,99 +1,67 @@
-# Ollama Autônomo V2 🤖🚀
+# Agent Ollama 🤖🚀
 
-Gerencie seu servidor Ubuntu através de conversas em linguagem natural com o Ollama, diretamente via SSH. Este assistente é capaz de executar comandos, analisar resultados e realizar tarefas multi-etapa de forma autônoma.
+Assistente de administração multiplataforma (Windows/Linux) que utiliza o Ollama para gerenciar seu sistema através de linguagem natural. Capaz de executar comandos PowerShell/Bash, analisar resultados e realizar tarefas multi-etapa de forma autônoma.
 
+![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-LLM-blue?style=for-the-badge)
-![AMD RX 580](https://img.shields.io/badge/AMD%20RX%20580-Vulkan-ED1C24?style=for-the-badge&logo=amd&logoColor=white)
 
 ## ✨ Funcionalidades
 
-- **Autonomia Total**: A IA executa comandos, lê a saída e decide o próximo passo até completar a tarefa.
+- **Autonomia Multiplataforma**: Executa comandos PowerShell no Windows e Bash no Linux.
+- **Instalação Simples**: Script de setup único que configura o ambiente e cria o comando global.
 - **Feedback em Tempo Real**: Mostra o que está pensando e fazendo antes de cada execução.
-- **Otimizado para AMD**: Configurado para reconhecer hardware AMD RX 580 com suporte a Vulkan.
-- **Interface Rica**: Utiliza a biblioteca `rich` para um terminal organizado e legível.
-- **Segurança**: Inclui limites de etapas (max 10) para evitar loops e consumo excessivo.
-- **Persistência de Dados**: Pasta `/data` dedicada para armazenar chaves de API, configurações de modelo e memória de longo prazo, protegida contra atualizações do GitHub.
+- **Voz Murf.ai**: Saída de áudio de alta qualidade integrada (opcional).
+- **Persistência de Dados**: Pasta `/data` dedicada para chaves de API, configurações e memória de longo prazo.
 
 ## 🛠️ Pré-requisitos
 
-1. **Ollama**: Instalado e rodando.
-2. **Modelo Llama 3**: `ollama pull llama3`.
-3. **Hardware**: Otimizado para Ubuntu com GPU AMD RX 580 (Vulkan).
+1. **Ollama**: Instalado e rodando localmente ou no servidor.
+2. **Modelo Llama 3**: `ollama pull llama3` (ou seu modelo preferido).
+3. **Python 3.8+**: Instalado no sistema.
 
-## 🚀 Instalação e Comando Global
+## 🚀 Instalação Rápida (Recomendado)
 
-1. Clone o repositório:
-   ```bash
-   git clone https://github.com/DanielAngelo-code/ollama-autonomo.git
-   cd ollama-autonomo
+O projeto agora possui um script de setup que faz tudo por você, incluindo a criação do comando global `agent-ollama` para ser usado de qualquer lugar.
+
+### No Windows (PowerShell):
+1. Abra o PowerShell como Administrador.
+2. Navegue até a pasta do projeto e execute:
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force; .\agent-setup.ps1
    ```
 
-2. Crie e ative um ambiente virtual:
-   - **No Linux/Ubuntu:**
-     ```bash
-     python3 -m venv venv
-     source venv/bin/activate
-     ```
-   - **No Windows (PowerShell):**
-     ```powershell
-     python -m venv venv
-     .\venv\Scripts\Activate.ps1
-     ```
-
-3. Instale as dependências:
+### No Linux (Bash):
+1. Navegue até a pasta do projeto e execute:
    ```bash
-   pip install -r requirements.txt
+   chmod +x agent-setup.sh
+   ./agent-setup.sh
    ```
 
-3. **Configurar Comando Global**:
-   - **No Linux/Ubuntu:**
-     Para chamar o assistente de qualquer lugar usando apenas `ollama-admin`:
-     ```bash
-     # Dê permissão ao script de entrada
-     chmod +x ollama-admin.sh
-     
-     # Crie um link simbólico no seu bin (as aspas são importantes se o seu caminho tiver espaços!)
-     sudo ln -s "$(pwd)/ollama-admin.sh" /usr/local/bin/ollama-admin
-     ```
-   - **No Windows:**
-     No Windows, o comando `sudo ln` não funciona. Para rodar o assistente, use:
-     ```powershell
-     python ollama_admin.py
-     ```
+---
 
 ## 📖 Como Usar
 
-### Execução Global
+### Execução de Qualquer Lugar
+Após o setup, você pode simplesmente digitar em qualquer terminal:
 ```bash
-ollama-admin
+agent-ollama
 ```
 
 ### Comandos Especiais
-- `/model <nome-do-modelo>`: Troca o modelo do Ollama em tempo real (ex: `/model llama3:8b`). O modelo deve estar baixado.
-- `/voices`: Lista todas as vozes disponíveis para o Murf.ai no idioma pt-BR, mostrando seus IDs.
-- `/setvoice <ID>`: Altera a voz do assistente usando o ID obtido no comando anterior.
-- `/setsudo <senha>`: Salva sua senha do usuário para que a IA possa executar comandos `sudo` automaticamente sem te interromper.
-- `/clearmem`: Limpa a memória persistente (`memory.json`) e reinicia o histórico da conversa atual.
+- `/model <nome>`: Troca o modelo (ex: `/model llama3`).
+- `/voices`: Lista vozes Murf.ai disponíveis (pt-BR).
+- `/setvoice <ID>`: Altera a voz do assistente.
+- `/setsudo <senha>`: (Linux apenas) Salva a senha para comandos `sudo`.
+- `/clearmem`: Limpa a memória e o histórico.
 - `sair`, `exit` ou `quit`: Encerra o assistente.
 
-### Atualizações Automáticas
-O sistema verifica por atualizações no GitHub toda vez que você inicia o `ollama-admin`. Se houver uma nova versão no repositório, ele fará o `git pull` automaticamente.
+## 🛡️ Segurança
 
-### Integração SSH (Modo "Shell AI")
-Para que o assistente inicie automaticamente ao logar via SSH, adicione ao seu `~/.bashrc`:
-
-```bash
-ollama-admin && exit
-```
-
-## 🛡️ Segurança e Responsabilidade
-
-Este script possui **autonomia para executar comandos BASH**. 
-- Não há confirmação manual (s/n) por padrão.
-- Use com cautela em ambientes de produção.
-- O autor não se responsabiliza por danos causados por comandos sugeridos pelo LLM.
+Este assistente executa comandos no seu sistema. 
+- **Windows**: Ele não eleva privilégios sozinho. Se precisar de permissão de admin, abra o terminal como administrador.
+- **Linux**: Pode usar `sudo` se a senha estiver configurada.
 
 ## 📄 Licença
 

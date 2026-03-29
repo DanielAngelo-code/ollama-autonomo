@@ -97,7 +97,7 @@ pygame.mixer.init()
 
 def speak(text):
     """Envia o texto para murf.ai e reproduz o áudio resultante."""
-    if not text.strip():
+    if not text.strip() or not MURF_API_KEY:
         return
 
     # Limpa markdown simples para a fala ser mais natural
@@ -158,7 +158,7 @@ def speak(text):
         console.print(f"[dim red](Erro ao gerar voz: {e})[/dim red]")
 
 SYSTEM_PROMPT = f"""
-Você é um assistente de administração multiplataforma ("Ollama Autônomo V2").
+Você é um assistente de administração multiplataforma ("Agent Ollama").
 Sua missão é ajudar o usuário com tarefas em Português (Brasil).
 
 AMBIENTE ATUAL: {PLATFORM} ({SHELL_TYPE})
@@ -197,7 +197,9 @@ def execute_command(command):
     
     # No Windows, garantimos o uso do PowerShell se o comando não for explicitamente CMD
     if IS_WINDOWS:
-        final_command = f'powershell -ExecutionPolicy Bypass -Command "{command.replace(\'"\', \'\\"\')}"'
+        # Escapa aspas duplas para o PowerShell e evita problemas de sintaxe no f-string
+        escaped_command = command.replace('"', '\\"')
+        final_command = f'powershell -ExecutionPolicy Bypass -Command "{escaped_command}"'
     elif command.strip().startswith("sudo ") and sudo_password:
         # No Linux, usamos 'sudo -S' para ler a senha do stdin
         final_command = command.replace("sudo ", f"echo '{sudo_password}' | sudo -S ", 1)
@@ -248,33 +250,18 @@ def check_for_updates():
 
 # Configurações do Ollama
 DEFAULT_MODEL = "llama3"
-CONFIG_FILE = "config.json"
-
-def load_config():
-    """Carrega as configurações do arquivo JSON."""
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    return {"model": DEFAULT_MODEL}
-
-def save_config(config):
-    """Salva as configurações no arquivo JSON."""
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=4)
-
-config = load_config()
-OLLAMA_MODEL = config.get("model", DEFAULT_MODEL)
 
 def chat():
-    global OLLAMA_MODEL, memory
+    global memory
     # Verifica atualizações ao iniciar
     check_for_updates()
     
+    # Pega o modelo das configurações
+    ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
+
     # Verifica se o Ollama está acessível e se o modelo existe
     try:
         models_response = ollama.list()
-        # O retorno de ollama.list() pode variar dependendo da versão da biblioteca
-        # Algumas versões retornam um objeto com atributo 'models', outras um dicionário
         models_list = []
         if isinstance(models_response, dict) and 'models' in models_response:
             models_list = models_response['models']
@@ -285,18 +272,18 @@ def chat():
         for m in models_list:
             if isinstance(m, dict) and 'name' in m:
                 model_names.append(m['name'])
-            elif hasattr(m, 'model'): # Algumas versões usam .model em vez de .name
+            elif hasattr(m, 'model'): 
                 model_names.append(m.model)
             elif hasattr(m, 'name'):
                 model_names.append(m.name)
 
-        if OLLAMA_MODEL not in model_names and (OLLAMA_MODEL + ":latest") not in model_names:
+        if ollama_model not in model_names and (ollama_model + ":latest") not in model_names:
             if model_names:
-                console.print(Panel(f"[bold yellow]Aviso:[/bold yellow] O modelo '[bold cyan]{OLLAMA_MODEL}[/bold cyan]' não foi encontrado.\n\n[bold]Modelos disponíveis detectados:[/bold]\n" + "\n".join([f"- {m}" for m in model_names]) + "\n\nDigite o nome de um modelo acima para usar agora ou pressione Enter para sair:", title="Modelo Ausente", border_style="yellow"))
+                console.print(Panel(f"[bold yellow]Aviso:[/bold yellow] O modelo '[bold cyan]{ollama_model}[/bold cyan]' não foi encontrado.\n\n[bold]Modelos disponíveis detectados:[/bold]\n" + "\n".join([f"- {m}" for m in model_names]) + "\n\nDigite o nome de um modelo acima para usar agora ou pressione Enter para sair:", title="Modelo Ausente", border_style="yellow"))
                 choice = console.input("[bold blue]Sua escolha:[/bold blue] ").strip()
                 if choice in model_names or (choice + ":latest") in model_names:
-                    OLLAMA_MODEL = choice
-                    settings["ollama_model"] = OLLAMA_MODEL
+                    ollama_model = choice
+                    settings["ollama_model"] = ollama_model
                     save_settings(settings)
                 else:
                     return
@@ -304,10 +291,10 @@ def chat():
                 console.print(Panel(f"[bold red]Aviso:[/bold red] Nenhum modelo foi encontrado no seu Ollama.\n\nPor favor, baixe um modelo primeiro no terminal com:\n[bold green]ollama pull llama3[/bold green] (ou o modelo de sua preferência)", title="Nenhum Modelo Encontrado", border_style="red"))
                 return
     except Exception as e:
-        console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando no servidor.", title="Erro Crítico", border_style="red"))
+        console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando.", title="Erro Crítico", border_style="red"))
         return
 
-    console.print(Panel(f"[bold green]Ollama Autônomo V2[/bold green]\nModelo atual: [bold cyan]{OLLAMA_MODEL}[/bold cyan]\nDigite '/model <nome>' para trocar.\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
+    console.print(Panel(f"[bold green]Agent Ollama[/bold green]\nModelo atual: [bold cyan]{ollama_model}[/bold cyan]\nDigite '/model <nome>' para trocar.\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
     
     # Prepara prompt de sistema com a memória atual
     current_memory_text = json.dumps(memory, indent=2, ensure_ascii=False)
@@ -326,7 +313,6 @@ def chat():
             if user_input.startswith("/model "):
                 new_model = user_input.split(" ")[1].strip()
                 try:
-                    # Verifica se o modelo já existe antes de permitir a troca
                     models_response = ollama.list()
                     models_list = []
                     if isinstance(models_response, dict) and 'models' in models_response:
@@ -347,16 +333,16 @@ def chat():
                         console.print(f"[bold red]Erro:[/bold red] O modelo '{new_model}' não está baixado.\nBaixe-o primeiro no terminal com: [bold green]ollama pull {new_model}[/bold green]")
                         continue
                     
-                    OLLAMA_MODEL = new_model
-                    settings["ollama_model"] = OLLAMA_MODEL
+                    ollama_model = new_model
+                    settings["ollama_model"] = ollama_model
                     save_settings(settings)
-                    console.print(f"[bold green]Modelo alterado para {OLLAMA_MODEL} e salvo![/bold green]")
+                    console.print(f"[bold green]Modelo alterado para {ollama_model} e salvo![/bold green]")
                     continue
                 except Exception as e:
                     console.print(f"[bold red]Erro ao verificar modelo {new_model}: {e}[/bold red]")
                     continue
 
-            # Novo comando para listar vozes do Murf.ai
+            # Comando para listar vozes do Murf.ai
             if user_input.strip() == "/voices":
                 if not MURF_API_KEY:
                     console.print("[bold red]Erro:[/bold red] Chave API do Murf.ai não configurada.")
@@ -380,16 +366,17 @@ def chat():
                         console.print(f"[bold red]Erro ao listar vozes:[/bold red] {e}")
                 continue
 
-            # Novo comando para trocar a voz
+            # Comando para trocar a voz
             if user_input.startswith("/setvoice "):
                 new_voice = user_input.split(" ")[1].strip()
                 settings["voice_id"] = new_voice
                 save_settings(settings)
+                global MURF_VOICE_ID
                 MURF_VOICE_ID = new_voice
                 console.print(f"[bold green]Voz alterada para {new_voice} e salva![/bold green]")
                 continue
 
-            # Novo comando para configurar a senha sudo
+            # Comando para configurar a senha sudo
             if user_input.startswith("/setsudo "):
                 password = user_input.split(" ", 1)[1].strip()
                 settings["sudo_password"] = password
@@ -397,11 +384,10 @@ def chat():
                 console.print("[bold green]Senha sudo salva com sucesso em data/settings.json![/bold green]")
                 continue
 
-            # Novo comando para limpar a memória
+            # Comando para limpar a memória
             if user_input.strip() == "/clearmem":
                 memory = {"notes": [], "last_interaction": ""}
                 save_memory(memory)
-                # Reinicializa a conversa para limpar o contexto do LLM
                 current_memory_text = json.dumps(memory, indent=2, ensure_ascii=False)
                 system_message = f"{SYSTEM_PROMPT}\n\nMEMÓRIA ATUAL:\n{current_memory_text}"
                 messages = [{'role': 'system', 'content': system_message}]
@@ -417,24 +403,23 @@ def chat():
                 full_response = ""
                 show_thoughts = settings.get("show_thoughts", False)
                 
-                status_text = f"Ollama ({OLLAMA_MODEL}) pensando..."
+                status_text = f"Ollama ({ollama_model}) pensando..."
                 
                 if show_thoughts:
                     with Live(Text(status_text, style="bold yellow"), refresh_per_second=10) as live:
-                        response_gen = ollama.chat(model=OLLAMA_MODEL, messages=messages, stream=True)
+                        response_gen = ollama.chat(model=ollama_model, messages=messages, stream=True)
                         for chunk in response_gen:
                             content = chunk['message']['content']
                             full_response += content
                             live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
                 else:
                     with console.status(f"[bold yellow]{status_text}[/bold yellow]"):
-                        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
+                        response = ollama.chat(model=ollama_model, messages=messages)
                         full_response = response['message']['content']
                 
                 llm_response = full_response
                 messages.append({'role': 'assistant', 'content': llm_response})
                 
-                # Verifica se a IA quer alterar a configuração de exibição de pensamentos
                 if "# CONFIG: SHOW_THOUGHTS=True" in llm_response:
                     settings["show_thoughts"] = True
                     save_settings(settings)
@@ -451,7 +436,6 @@ def chat():
                     step_count += 1
                     if summary:
                         console.print(f"[italic yellow]→ {summary}[/italic yellow]")
-                        # Fala o resumo da etapa atual
                         speak(summary)
                     
                     console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
@@ -459,7 +443,6 @@ def chat():
                     
                     result_msg = f"RESULTADO DA ETAPA {step_count}:\nSTDOUT: {stdout}\nSTDERR: {stderr}\nEXIT_CODE: {code}"
                     
-                    # Limita o tamanho do resultado para não pesar no contexto da IA
                     if len(result_msg) > 2000:
                         result_msg = result_msg[:1000] + "\n... (saída truncada por ser muito longa) ...\n" + result_msg[-1000:]
                     
@@ -467,7 +450,6 @@ def chat():
                     continue
                 else:
                     console.print(Panel(Markdown(llm_response), border_style="green", title="Tarefa Concluída"))
-                    # Fala a resposta final
                     speak(llm_response)
                     break
             
