@@ -31,9 +31,19 @@ Gerencie seu servidor Ubuntu através de conversas em linguagem natural com o Ol
    ```
 
 2. Crie e ative um ambiente virtual:
+   - **No Linux/Ubuntu:**
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
+   - **No Windows (PowerShell):**
+     ```powershell
+     python -m venv venv
+     .\venv\Scripts\Activate.ps1
+     ```
+
+3. Instale as dependências:
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
    pip install -r requirements.txt
    ```
 
