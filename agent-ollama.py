@@ -230,7 +230,8 @@ async def run_discord_bot():
         console.print(f"[dim magenta][DISCORD DEBUG][/dim magenta] Mensagem vista em #[bold]{message.channel}[/bold] de [bold]{message.author}[/bold]: {message.content}")
 
         # Se for Mensagem Direta (DM) e não for um comando (!), processa como prompt automático
-        if isinstance(message.channel, discord.DMChannel) and not message.content.startswith("!"):
+        if message.guild is None and not message.content.startswith("!"):
+            console.print(f"[bold magenta][DISCORD][/bold magenta] Processando DM de [bold]{message.author}[/bold]")
             await handle_discord_prompt(message.channel, message.content)
             return
 
@@ -470,8 +471,12 @@ async def process_multi_step_task(messages, ollama_model, is_discord=False, ctx=
         
         if is_discord:
             async with ctx.typing():
+                console.print(f"[bold magenta][DISCORD][/bold magenta] {status_text}")
                 response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages)
                 full_response = response['message']['content']
+                # Log da resposta (primeiros 100 caracteres)
+                preview = full_response[:100].replace("\n", " ")
+                console.print(f"[bold magenta][DISCORD][/bold magenta] Ollie respondeu: [dim cyan]{preview}...[/dim cyan]")
         else:
             if show_thoughts:
                 with Live(Text(status_text, style="bold yellow"), refresh_per_second=10) as live:
@@ -533,6 +538,12 @@ async def process_multi_step_task(messages, ollama_model, is_discord=False, ctx=
                 console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
             
             stdout, stderr, code = execute_command(command)
+            
+            # Log da saída do comando no terminal para acompanhamento
+            if is_discord:
+                output_preview = stdout[:150].replace("\n", " ").strip()
+                console.print(f"[bold magenta][DISCORD][/bold magenta] Saída: [dim]{output_preview}...[/dim]")
+            
             result_msg = f"RESULTADO DA ETAPA {step_count}:\nSTDOUT: {stdout}\nSTDERR: {stderr}\nEXIT_CODE: {code}"
             
             if len(result_msg) > 2000:
