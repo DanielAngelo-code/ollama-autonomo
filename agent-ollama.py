@@ -189,11 +189,14 @@ async def run_discord_bot():
 
     @bot.event
     async def on_ready():
-        console.print(f"[green]Bot Discord conectado como {bot.user}![/green]")
+        console.print(f"[bold magenta][DISCORD][/bold magenta] Bot conectado como [bold]{bot.user}[/bold]!")
 
     @bot.command(name="cmd")
     async def cmd(ctx, *, prompt):
         """Comando para enviar prompt para o Ollie via Discord."""
+        # Log da interação no terminal/arquivo de log
+        console.print(f"[bold magenta][DISCORD][/bold magenta] Mensagem de [bold]{ctx.author.name}[/bold]: {prompt}")
+        
         # Simula o loop do chat, mas para o Discord
         messages = [
             {'role': 'system', 'content': f"{SYSTEM_PROMPT.format(user_name=ctx.author.name)}\n\n(AVISO: Você está respondendo via Discord)"},
@@ -201,21 +204,27 @@ async def run_discord_bot():
         ]
         
         try:
-            # Chama o processador de tarefas multi-etapa
-            ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
-            final_response, _ = await process_multi_step_task(messages, ollama_model, is_discord=True, ctx=ctx)
-            
-            # Envia a resposta final
-            if final_response:
-                if len(final_response) > 2000:
-                    for i in range(0, len(final_response), 2000):
-                        await ctx.send(final_response[i:i+2000])
+            # Mostra que está trabalhando imediatamente no Discord
+            async with ctx.typing():
+                # Chama o processador de tarefas multi-etapa
+                ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
+                final_response, _ = await process_multi_step_task(messages, ollama_model, is_discord=True, ctx=ctx)
+                
+                # Log da resposta final no terminal
+                console.print(f"[bold magenta][DISCORD][/bold magenta] Ollie respondeu a {ctx.author.name}")
+                
+                # Envia a resposta final
+                if final_response:
+                    if len(final_response) > 2000:
+                        for i in range(0, len(final_response), 2000):
+                            await ctx.send(final_response[i:i+2000])
+                    else:
+                        await ctx.send(final_response)
                 else:
-                    await ctx.send(final_response)
-            else:
-                await ctx.send("✅ Tarefa concluída.")
+                    await ctx.send("✅ Tarefa concluída.")
                 
         except Exception as e:
+            console.print(f"[bold red][DISCORD] Erro ao processar pedido de {ctx.author.name}: {e}[/bold red]")
             await ctx.send(f"❌ Erro ao processar pedido: {e}")
 
     try:
@@ -489,12 +498,15 @@ async def process_multi_step_task(messages, ollama_model, is_discord=False, ctx=
             step_count += 1
             if summary:
                 if is_discord:
+                    console.print(f"[bold magenta][DISCORD][/bold magenta] Etapa {step_count}: {summary}")
                     await ctx.send(f"⏳ **Etapa {step_count}:** {summary}")
                 else:
                     console.print(f"[italic yellow]→ {summary}[/italic yellow]")
                     await speak(summary)
             
-            if not is_discord:
+            if is_discord:
+                console.print(f"[bold magenta][DISCORD][/bold magenta] Executando: `{command}`")
+            else:
                 console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
             
             stdout, stderr, code = execute_command(command)
