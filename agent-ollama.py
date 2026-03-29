@@ -16,6 +16,17 @@ from rich.text import Text
 
 console = Console()
 
+AGENT_NAME = "Ollie"
+
+ASCII_LOGO = r"""
+   _____                             __     ____   ____
+  /  _  \    ____   ____   ____    _/  |_  \   \ /   /
+ /  /_\  \  / ___\_/ __ \ /    \   \   __\  \   Y   / 
+/    |    \/ /_/  >  ___/|   |  \   |  |     \     /  
+\____|__  /\___  / \___  >___|  /   |__|      \___/   
+        \//_____/      \/     \/                      
+"""
+
 # Detecção de Plataforma
 PLATFORM = platform.system()
 IS_WINDOWS = PLATFORM == "Windows"
@@ -32,12 +43,14 @@ if not os.path.exists(DATA_DIR):
 def load_settings():
     """Carrega as configurações e chaves da pasta data."""
     default_settings = {
+        "user_name": "Usuário",
         "murf_api_key": "",
         "ollama_model": "llama3",
         "voice_id": "pt-BR-benício",
         "voice_style": "Conversational",
         "sudo_password": "",
-        "show_thoughts": False
+        "show_thoughts": False,
+        "tts_enabled": False
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -97,6 +110,10 @@ pygame.mixer.init()
 
 def speak(text):
     """Envia o texto para murf.ai e reproduz o áudio resultante."""
+    # Verifica se o TTS está habilitado nas configurações
+    if not settings.get("tts_enabled", False):
+        return
+
     if not text.strip() or not MURF_API_KEY:
         return
 
@@ -158,8 +175,9 @@ def speak(text):
         console.print(f"[dim red](Erro ao gerar voz: {e})[/dim red]")
 
 SYSTEM_PROMPT = f"""
-Você é um assistente de administração multiplataforma ("Agent Ollama").
+Você é {AGENT_NAME}, um assistente de administração multiplataforma ("Agent Ollama").
 Sua missão é ajudar o usuário com tarefas em Português (Brasil).
+O nome atual do usuário é: {{user_name}}. Refira-se a ele por esse nome quando apropriado.
 
 AMBIENTE ATUAL: {PLATFORM} ({SHELL_TYPE})
 
@@ -175,7 +193,10 @@ DIRETRIZES DE ESTILO:
 3. **Raciocínio Multi-etapa**: Uma etapa por vez.
 4. **Execução**: Use ```bash\ncomando\n``` para comandos Linux ou ```powershell\ncomando\n``` para Windows.
 5. **Memória**: Localizada em ./data/memory.json. Use-a para guardar fatos importantes sobre o sistema.
-6. **Controle de Pensamentos**: Use ```bash\n# CONFIG: SHOW_THOUGHTS=True\n``` ou False para alternar o modo debug.
+6. **Controle de Interface**: 
+   - Pensamentos: Use ```bash\n# CONFIG: SHOW_THOUGHTS=True\n``` ou False.
+   - Voz (TTS): Use ```bash\n# CONFIG: TTS_ENABLED=True\n``` ou False.
+   - Nome do Usuário: Use ```bash\n# CONFIG: USER_NAME=NovoNome\n``` para mudar como você chama o usuário.
 """
 
 def extract_bash_command(response):
@@ -294,17 +315,20 @@ def chat():
         console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando.", title="Erro Crítico", border_style="red"))
         return
 
-    console.print(Panel(f"[bold green]Agent Ollama[/bold green]\nModelo atual: [bold cyan]{ollama_model}[/bold cyan]\nDigite '/model <nome>' para trocar.\nModo multi-etapa com atualizações e voz ativados.", title="Sistema Ativo"))
+    # Exibe o logo e boas-vindas
+    console.print(Panel(Text(ASCII_LOGO, style="bold cyan"), border_style="cyan"))
+    console.print(Panel(f"[bold green]{AGENT_NAME} - Agent Ollama[/bold green]\nModelo atual: [bold cyan]{ollama_model}[/bold cyan]\nDigite '/model <nome>' para trocar.\nModo multi-etapa e atualizações ativados.", title="Sistema Ativo"))
     
     # Prepara prompt de sistema com a memória atual
     current_memory_text = json.dumps(memory, indent=2, ensure_ascii=False)
-    system_message = f"{SYSTEM_PROMPT}\n\nMEMÓRIA ATUAL:\n{current_memory_text}"
+    system_message = f"{SYSTEM_PROMPT.format(user_name=settings.get('user_name', 'Usuário'))}\n\nMEMÓRIA ATUAL:\n{current_memory_text}"
     
     messages = [{'role': 'system', 'content': system_message}]
 
     while True:
         try:
-            user_input = console.input("[bold blue]Você:[/bold blue] ")
+            current_user = settings.get("user_name", "Usuário")
+            user_input = console.input(f"[bold blue]{current_user}:[/bold blue] ")
             
             if user_input.lower() in ["sair", "exit", "quit"]:
                 break
@@ -376,8 +400,11 @@ def chat():
                 console.print(f"[bold green]Voz alterada para {new_voice} e salva![/bold green]")
                 continue
 
-            # Comando para configurar a senha sudo
+            # Comando para configurar a senha sudo (Linux)
             if user_input.startswith("/setsudo "):
+                if IS_WINDOWS:
+                    console.print("[bold yellow]Aviso:[/bold yellow] O comando sudo não é utilizado no Windows.")
+                    continue
                 password = user_input.split(" ", 1)[1].strip()
                 settings["sudo_password"] = password
                 save_settings(settings)
@@ -420,6 +447,7 @@ def chat():
                 llm_response = full_response
                 messages.append({'role': 'assistant', 'content': llm_response})
                 
+                # Verifica se a IA quer alterar a configuração de exibição de pensamentos
                 if "# CONFIG: SHOW_THOUGHTS=True" in llm_response:
                     settings["show_thoughts"] = True
                     save_settings(settings)
@@ -428,6 +456,24 @@ def chat():
                     settings["show_thoughts"] = False
                     save_settings(settings)
                     console.print("[bold magenta]Modo de visualização de pensamentos desativado.[/bold magenta]")
+                
+                # Verifica se a IA quer alterar a configuração do TTS
+                if "# CONFIG: TTS_ENABLED=True" in llm_response:
+                    settings["tts_enabled"] = True
+                    save_settings(settings)
+                    console.print("[bold magenta]Saída de voz (TTS) ativada.[/bold magenta]")
+                elif "# CONFIG: TTS_ENABLED=False" in llm_response:
+                    settings["tts_enabled"] = False
+                    save_settings(settings)
+                    console.print("[bold magenta]Saída de voz (TTS) desativada.[/bold magenta]")
+                
+                # Verifica se a IA quer alterar o nome do usuário
+                user_name_match = re.search(r"# CONFIG: USER_NAME=(.*)", llm_response)
+                if user_name_match:
+                    new_name = user_name_match.group(1).strip()
+                    settings["user_name"] = new_name
+                    save_settings(settings)
+                    console.print(f"[bold magenta]Nome do usuário alterado para: {new_name}[/bold magenta]")
 
                 command = extract_bash_command(llm_response)
                 summary = extract_summary(llm_response)
