@@ -5,6 +5,8 @@ import re
 import requests
 import json
 import os
+# Silencia mensagem de boas-vindas do pygame
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import platform
 import time
 import pygame
@@ -725,7 +727,18 @@ if __name__ == "__main__":
 
         # Iniciar bot em segundo plano
         if len(sys.argv) > 1 and sys.argv[1] == "start":
-            # Aqui não chamamos check_instance_lock() porque o processo que ele vai disparar é que deve travar
+            # Verifica se já existe algo rodando ANTES de tentar iniciar outro
+            if os.path.exists(LOCK_FILE):
+                try:
+                    with open(LOCK_FILE, "r") as f:
+                        pid = int(f.read().strip())
+                    if is_process_running(pid):
+                        console.print(f"[bold red]Erro:[/bold red] O {AGENT_NAME} já está rodando em segundo plano (PID: {pid}).")
+                        console.print("[yellow]Use 'agent-ollama stop' para encerrar antes de iniciar novamente.[/yellow]")
+                        sys.exit(1)
+                except:
+                    pass
+
             if not settings.get("discord_token") or not settings.get("discord_enabled"):
                 console.print("[bold red]Erro:[/bold red] Discord não está configurado ou habilitado. Use 'agent-ollama config' primeiro.")
                 sys.exit(1)
