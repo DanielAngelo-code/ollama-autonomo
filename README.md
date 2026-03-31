@@ -24,6 +24,7 @@ Assistente de administração multiplataforma (Windows/Linux) que utiliza o Olla
 1. **Ollama**: Instalado e rodando localmente ou no servidor.
 2. **Modelo Llama 3**: `ollama pull llama3` (ou seu modelo preferido).
 3. **Python 3.8+**: Instalado no sistema. Não é necessário criar ou ativar um `venv`.
+4. **ElevenLabs TTS** (opcional): se usar o SDK ElevenLabs remoto, defina `ELEVENLABS_API_KEY` no ambiente.
 
 ## 🚀 Instalação Rápida (Recomendado)
 

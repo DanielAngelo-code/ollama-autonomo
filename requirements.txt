@@ -1,4 +1,4 @@
 ollama
 rich
 pygame
-elevenlabs
+elevenlabs>=2.40.0

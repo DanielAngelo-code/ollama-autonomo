@@ -32,6 +32,13 @@ def install_requirements():
 
 
 import importlib
+import platform
+
+PLATFORM = platform.system()
+IS_WINDOWS = PLATFORM == "Windows"
+if not IS_WINDOWS and not os.getenv("DISPLAY"):
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    os.environ["SDL_AUDIODRIVER"] = "dummy"
 
 try:
     import ollama
@@ -58,40 +65,118 @@ except ModuleNotFoundError as e:
 
 def import_elevenlabs_tts():
     try:
-        from elevenlabs import generate, voices as eleven_voices
-        return generate, eleven_voices
-    except ImportError:
-        pass
-
-    try:
         import elevenlabs
-        generate = getattr(elevenlabs, "generate", None)
-        eleven_voices = getattr(elevenlabs, "voices", None)
-        if generate and eleven_voices:
-            return generate, eleven_voices
+        return elevenlabs
     except ImportError:
-        pass
+        raise ImportError("Não foi possível importar o pacote elevenlabs. Instale-o com pip e verifique se o ambiente está correto.")
 
-    for module_name in [
-        "elevenlabs.api",
-        "elevenlabs.text_to_speech",
-        "elevenlabs.tts",
-        "elevenlabs.audio",
-        "elevenlabs.speech"
-    ]:
+class ElevenLabsTTS:
+    def __init__(self, api_key=None):
+        self.api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
+        self.pkg = import_elevenlabs_tts()
+        self.client = None
+        self.generate_method = None
+        self.list_voices_method = None
+        self.voice_lookup_method = None
+        self._setup()
+
+    def _setup(self):
+        ClientClass = getattr(self.pkg, "ElevenLabs", None) or getattr(self.pkg, "Client", None)
+        if ClientClass:
+            try:
+                self.client = ClientClass(api_key=self.api_key) if self.api_key else ClientClass()
+            except TypeError:
+                self.client = ClientClass()
+
+        self.generate_method = getattr(self.pkg, "generate", None)
+        self.list_voices_method = getattr(self.pkg, "voices", None) or getattr(self.pkg, "list_voices", None)
+
+        if self.client is not None:
+            if self.generate_method is None:
+                self.generate_method = getattr(self.client, "generate", None)
+            if self.generate_method is None and hasattr(self.client, "speech"):
+                speech_obj = getattr(self.client, "speech")
+                self.generate_method = getattr(speech_obj, "speech_to_stream", None) or getattr(speech_obj, "generate", None) or getattr(speech_obj, "create", None)
+            if self.list_voices_method is None and hasattr(self.client, "voices"):
+                voices_obj = getattr(self.client, "voices")
+                self.list_voices_method = getattr(voices_obj, "list", None) or getattr(voices_obj, "get_all", None) or getattr(voices_obj, "all", None)
+                self.voice_lookup_method = getattr(voices_obj, "get_voice", None) or getattr(voices_obj, "voice", None)
+
+    def _resolve_voice(self, voice):
+        if self.voice_lookup_method is not None:
+            try:
+                return self.voice_lookup_method(voice)
+            except Exception:
+                return voice
+        return voice
+
+    def _read_audio(self, audio):
+        if audio is None:
+            return None
+        if isinstance(audio, bytes):
+            return audio
+        if isinstance(audio, str):
+            return audio.encode("utf-8")
+        if hasattr(audio, "read"):
+            try:
+                return audio.read()
+            except Exception:
+                return None
+        return None
+
+    def generate_audio(self, text, voice, model):
+        if self.generate_method is None:
+            raise RuntimeError("Método de geração de áudio ElevenLabs não encontrado.")
+
+        voice_arg = self._resolve_voice(voice)
         try:
-            module = importlib.import_module(module_name)
-            generate = getattr(module, "generate", None)
-            eleven_voices = getattr(module, "voices", None) or getattr(module, "get_voices", None)
-            if generate and eleven_voices:
-                return generate, eleven_voices
-        except Exception:
-            continue
+            return self.generate_method(text=text, voice=voice_arg, model=model)
+        except TypeError:
+            pass
 
-    raise ImportError("Não foi possível importar as funções generate/voices do pacote elevenlabs.")
+        try:
+            return self.generate_method(text, voice_arg, model)
+        except TypeError:
+            pass
 
+        if self.client is not None and hasattr(self.client, "speech"):
+            speech_obj = getattr(self.client, "speech")
+            if hasattr(speech_obj, "speech_to_stream"):
+                audio = speech_obj.speech_to_stream(text=text, voice=voice_arg, model=model)
+                return self._read_audio(audio)
+            if hasattr(speech_obj, "generate"):
+                audio = speech_obj.generate(text=text, voice=voice_arg, model=model)
+                return self._read_audio(audio)
 
-generate, eleven_voices = import_elevenlabs_tts()
+        raise RuntimeError("Falha ao chamar a API de voz do ElevenLabs.")
+
+    def list_voices(self):
+        if self.list_voices_method is None:
+            raise RuntimeError("Método de listagem de vozes ElevenLabs não encontrado.")
+        voices = self.list_voices_method()
+        if voices is None:
+            return []
+        return voices
+
+    def voice_names(self):
+        voices = self.list_voices()
+        result = []
+        for v in voices:
+            if isinstance(v, dict):
+                result.append(v.get("name") or v.get("voice_id") or v.get("id"))
+            elif hasattr(v, "name"):
+                result.append(v.name)
+            elif hasattr(v, "voice_id"):
+                result.append(v.voice_id)
+            else:
+                result.append(str(v))
+        return [name for name in result if name]
+
+try:
+    eleven_tts = ElevenLabsTTS()
+except Exception as e:
+    eleven_tts = None
+    print(f"Aviso: ElevenLabs TTS não pôde ser inicializado: {e}")
 
 # Silencia mensagem de boas-vindas do pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -241,6 +326,10 @@ async def speak(text):
     if not settings.get("tts_enabled", False):
         return
 
+    if eleven_tts is None:
+        console.print("[dim red](ElevenLabs TTS não está configurado.)[/dim red]")
+        return
+
     if not text.strip():
         return
 
@@ -249,7 +338,7 @@ async def speak(text):
 
     try:
         with console.status("[bold magenta]Gerando voz local com ElevenLabs...[/bold magenta]"):
-            audio_bytes = await asyncio.to_thread(generate, text=clean_text, voice=voice, model="eleven_monolingual_v1")
+            audio_bytes = await asyncio.to_thread(eleven_tts.generate_audio, clean_text, voice, "eleven_monolingual_v1")
             if not audio_bytes:
                 console.print("[dim red](Nenhum áudio gerado pelo ElevenLabs local.)[/dim red]")
                 return
@@ -371,19 +460,11 @@ def get_ollama_connection_help():
 
 def get_available_voices():
     """Retorna a lista de vozes locais do ElevenLabs."""
+    if eleven_tts is None:
+        return []
+
     try:
-        voices_list = eleven_voices()
-        voice_names = []
-        for v in voices_list:
-            if isinstance(v, dict):
-                voice_names.append(v.get('name') or v.get('voice_id') or v.get('id'))
-            elif hasattr(v, 'name'):
-                voice_names.append(v.name)
-            elif hasattr(v, 'voice_id'):
-                voice_names.append(v.voice_id)
-            else:
-                voice_names.append(str(v))
-        return [v for v in voice_names if v]
+        return eleven_tts.voice_names()
     except Exception:
         return []
 
@@ -662,18 +743,24 @@ async def chat():
 
             # Comando para listar vozes locais ElevenLabs
             if user_input.strip() == "/voices":
+                if eleven_tts is None:
+                    console.print("[bold red]Erro:[/bold red] ElevenLabs TTS não está configurado.")
+                    continue
+
                 with console.status("[bold magenta]Buscando vozes locais ElevenLabs...[/bold magenta]"):
                     try:
-                        voices_list = await asyncio.to_thread(eleven_voices)
+                        voices_list = await asyncio.to_thread(eleven_tts.list_voices)
                         table_text = "[bold cyan]Vozes ElevenLabs locais disponíveis:[/bold cyan]\n"
                         for v in voices_list:
                             voice_name = None
                             if isinstance(v, dict):
-                                voice_name = v.get('name') or v.get('voice_id')
+                                voice_name = v.get('name') or v.get('voice_id') or v.get('id')
                             elif hasattr(v, 'name'):
                                 voice_name = v.name
                             elif hasattr(v, 'voice_id'):
                                 voice_name = v.voice_id
+                            else:
+                                voice_name = str(v)
                             table_text += f"- {voice_name}\n"
                         console.print(Panel(table_text, title="Vozes ElevenLabs"))
                         console.print("Use `/setvoice <nome_da_voz>` para trocar.")
