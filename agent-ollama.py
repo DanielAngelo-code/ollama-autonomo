@@ -199,11 +199,26 @@ class ElevenLabsTTS:
         except Exception as e:
             raise RuntimeError(f"Falha ao gerar áudio ElevenLabs: {e}")
 
-try:
-    eleven_tts = ElevenLabsTTS()
-except Exception as e:
-    eleven_tts = None
-    print(f"Aviso: ElevenLabs TTS não pôde ser inicializado: {e}")
+
+def init_eleven_tts(settings=None):
+    api_key = None
+    if isinstance(settings, dict):
+        api_key = settings.get("tts_api_key")
+    api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
+
+    try:
+        return ElevenLabsTTS(api_key=api_key)
+    except Exception as e:
+        print(f"Aviso: ElevenLabs TTS não pôde ser inicializado: {e}")
+        return None
+
+
+def reload_eleven_tts():
+    global eleven_tts
+    eleven_tts = init_eleven_tts(settings)
+
+
+eleven_tts = None
 
 # Silencia mensagem de boas-vindas do pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -302,6 +317,7 @@ def load_settings():
         "user_name": "Usuário",
         "ollama_model": "llama3",
         "tts_voice": "alloy",
+        "tts_api_key": "",
         "sudo_password": "",
         "show_thoughts": False,
         "tts_enabled": False
@@ -342,6 +358,7 @@ def save_memory(memory):
 # Inicializa configurações e memória
 settings = load_settings()
 memory = load_memory()
+eleven_tts = init_eleven_tts(settings)
 
 OLLAMA_MODEL = settings["ollama_model"]
 
@@ -412,6 +429,11 @@ DIRETRIZES DE ESTILO:
 6. **Controle de Interface**: 
    - Pensamentos: Use ```bash\n# CONFIG: SHOW_THOUGHTS=True\n``` ou False.
    - Voz (TTS): Use ```bash\n# CONFIG: TTS_ENABLED=True\n``` ou False.
+   - Chave ElevenLabs: Use ```bash
+# CONFIG: ELEVENLABS_API_KEY=SuaChaveAqui
+``` para configurar a API de voz.
+# CONFIG: ELEVENLABS_API_KEY=SuaChaveAqui
+# CONFIG: ELEVENLABS_API_KEY=SuaChaveAqui
    - Nome do Usuário: Use ```bash\n# CONFIG: USER_NAME=NovoNome\n``` para mudar como você chama o usuário.
 """
 
@@ -650,6 +672,14 @@ async def process_multi_step_task(messages, ollama_model):
             save_settings(settings)
             console.print(f"[bold magenta]Voz ElevenLabs alterada para: {new_voice}[/bold magenta]")
 
+        api_key_match = re.search(r"# CONFIG: ELEVENLABS_API_KEY=(.*)", llm_response)
+        if api_key_match:
+            new_api_key = api_key_match.group(1).strip()
+            settings["tts_api_key"] = new_api_key
+            save_settings(settings)
+            reload_eleven_tts()
+            console.print("[bold magenta]Chave ElevenLabs salva e recarregada.[/bold magenta]")
+
         user_name_match = re.search(r"# CONFIG: USER_NAME=(.*)", llm_response)
         if user_name_match:
             new_name = user_name_match.group(1).strip()
@@ -803,6 +833,15 @@ async def chat():
                 console.print(f"[bold green]Voz ElevenLabs alterada para {new_voice} e salva![/bold green]")
                 continue
 
+            # Comando para configurar a chave ElevenLabs API
+            if user_input.startswith("/setapikey "):
+                new_key = user_input.split(" ", 1)[1].strip()
+                settings["tts_api_key"] = new_key
+                save_settings(settings)
+                reload_eleven_tts()
+                console.print("[bold green]Chave ElevenLabs salva e recarregada![/bold green]")
+                continue
+
             # Comando para configurar a senha sudo (Linux)
             if user_input.startswith("/setsudo "):
                 if IS_WINDOWS:
@@ -848,7 +887,8 @@ if __name__ == "__main__":
                 console.print("1. Nome do Usuário")
                 console.print("2. Modelo do Ollama")
                 console.print("3. Voz ElevenLabs local")
-                console.print("4. Senha Sudo (Linux)")
+                console.print("4. Chave ElevenLabs API")
+                console.print("5. Senha Sudo (Linux)")
                 console.print("0. Sair e Salvar")
                 
                 opcao = console.input("\n[bold yellow]Opção: [/bold yellow]").strip()
@@ -860,6 +900,9 @@ if __name__ == "__main__":
                 elif opcao == "3":
                     settings["tts_voice"] = console.input(f"Nova voz ElevenLabs local (atual: {settings['tts_voice']}): ").strip() or settings["tts_voice"]
                 elif opcao == "4":
+                    settings["tts_api_key"] = console.input("Nova chave ElevenLabs API (não será exibida): ").strip() or settings["tts_api_key"]
+                    reload_eleven_tts()
+                elif opcao == "5":
                     if IS_WINDOWS:
                         console.print("[red]Sudo não é usado no Windows.[/red]")
                     else:

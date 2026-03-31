@@ -82,6 +82,7 @@ agent-ollama
 - `/model <nome>`: Troca o modelo (ex: `/model llama3`).
 - `/voices`: Lista vozes ElevenLabs locais disponíveis.
 - `/setvoice <nome_da_voz>`: Altera a voz do assistente.
+- `/setapikey <sua_chave>`: Salva e recarrega a chave ElevenLabs API.
 - `/setsudo <senha>`: (Linux apenas) Salva a senha para comandos `sudo`.
 - `/clearmem`: Limpa a memória e o histórico.
 - `sair`, `exit` ou `quit`: Encerra o assistente.
