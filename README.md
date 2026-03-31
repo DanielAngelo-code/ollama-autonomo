@@ -25,16 +25,17 @@ Assistente de administração multiplataforma (Windows/Linux) que utiliza o Olla
 2. **Modelo Llama 3**: `ollama pull llama3` (ou seu modelo preferido).
 3. **Python 3.8+**: Instalado no sistema.
 
-## 🚀 Instalação Rápida (Recomendado)
+## 🚀 Instalação Rápida (Comando Global)
 
-O projeto agora possui um script de setup que faz tudo por você, incluindo a criação do comando global `agent-ollama` para ser usado de qualquer lugar.
+O projeto possui scripts de setup que configuram tudo automaticamente, incluindo o comando global `agent-ollama` para que você possa chamá-lo de qualquer lugar, exatamente como o `ollama` ou `openclaw`.
 
 ### No Windows (PowerShell):
-1. Abra o PowerShell como Administrador.
+1. Abra o PowerShell como **Administrador**.
 2. Navegue até a pasta do projeto e execute:
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process -Force; .\agent-setup.ps1
    ```
+3. **Reinicie o terminal** para que o comando `agent-ollama` seja reconhecido globalmente.
 
 ### No Linux (Bash):
 1. Navegue até a pasta do projeto e execute:
@@ -42,28 +43,22 @@ O projeto agora possui um script de setup que faz tudo por você, incluindo a cr
    chmod +x agent-setup.sh
    ./agent-setup.sh
    ```
-
-### Configurações Adicionais:
-Você pode configurar chaves de API, tokens do Discord e outras preferências usando o comando:
-```bash
-agent-ollama config
-```
-
-### Modo Segundo Plano (Bot Discord)
-Você pode iniciar o Ollie apenas como bot do Discord e deixá-lo rodando em segundo plano, mesmo após fechar o terminal:
-- **Iniciar**: `agent-ollama start`
-- **Acompanhar Logs**: `agent-ollama log`
-- **Parar**: `agent-ollama stop`
+2. Agora você pode usar `agent-ollama` em qualquer terminal.
 
 ---
 
 ## 📖 Como Usar
 
-### Execução de Qualquer Lugar
-Após o setup, você pode simplesmente digitar em qualquer terminal:
+### Execução Global
+Após o setup, basta digitar em qualquer terminal (independente da pasta onde você esteja):
 ```bash
 agent-ollama
 ```
+Ou para funções específicas:
+- `agent-ollama start` (Inicia o bot do Discord em segundo plano)
+- `agent-ollama config` (Abre o menu de configurações)
+- `agent-ollama log` (Acompanha os logs em tempo real)
+- `agent-ollama stop` (Para todas as instâncias rodando)
 
 ### Comandos Especiais
 - `/model <nome>`: Troca o modelo (ex: `/model llama3`).
