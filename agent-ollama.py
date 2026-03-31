@@ -75,91 +75,52 @@ class ElevenLabsTTS:
         self.api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
         self.pkg = import_elevenlabs_tts()
         self.client = None
-        self.generate_method = None
-        self.list_voices_method = None
-        self.voice_lookup_method = None
+        self.text_to_speech = None
+        self.voices_client = None
+        self.pkg_voices_fn = None
+        self.cached_voices = None
         self._setup()
 
     def _setup(self):
         ClientClass = getattr(self.pkg, "ElevenLabs", None) or getattr(self.pkg, "Client", None)
-        if ClientClass:
-            try:
-                self.client = ClientClass(api_key=self.api_key) if self.api_key else ClientClass()
-            except TypeError:
-                self.client = ClientClass()
-
-        self.generate_method = getattr(self.pkg, "generate", None)
-        self.list_voices_method = getattr(self.pkg, "voices", None) or getattr(self.pkg, "list_voices", None)
-
-        if self.client is not None:
-            if self.generate_method is None:
-                self.generate_method = getattr(self.client, "generate", None)
-            if self.generate_method is None and hasattr(self.client, "speech"):
-                speech_obj = getattr(self.client, "speech")
-                self.generate_method = getattr(speech_obj, "speech_to_stream", None) or getattr(speech_obj, "generate", None) or getattr(speech_obj, "create", None)
-            if self.list_voices_method is None and hasattr(self.client, "voices"):
-                voices_obj = getattr(self.client, "voices")
-                self.list_voices_method = getattr(voices_obj, "list", None) or getattr(voices_obj, "get_all", None) or getattr(voices_obj, "all", None)
-                self.voice_lookup_method = getattr(voices_obj, "get_voice", None) or getattr(voices_obj, "voice", None)
-
-    def _resolve_voice(self, voice):
-        if self.voice_lookup_method is not None:
-            try:
-                return self.voice_lookup_method(voice)
-            except Exception:
-                return voice
-        return voice
-
-    def _read_audio(self, audio):
-        if audio is None:
-            return None
-        if isinstance(audio, bytes):
-            return audio
-        if isinstance(audio, str):
-            return audio.encode("utf-8")
-        if hasattr(audio, "read"):
-            try:
-                return audio.read()
-            except Exception:
-                return None
-        return None
-
-    def generate_audio(self, text, voice, model):
-        if self.generate_method is None:
-            raise RuntimeError("Método de geração de áudio ElevenLabs não encontrado.")
-
-        voice_arg = self._resolve_voice(voice)
-        try:
-            return self.generate_method(text=text, voice=voice_arg, model=model)
-        except TypeError:
-            pass
+        if ClientClass is None:
+            raise RuntimeError("Cliente ElevenLabs não encontrado no pacote elevenlabs.")
 
         try:
-            return self.generate_method(text, voice_arg, model)
+            self.client = ClientClass(api_key=self.api_key) if self.api_key else ClientClass()
         except TypeError:
-            pass
+            self.client = ClientClass()
 
-        if self.client is not None and hasattr(self.client, "speech"):
-            speech_obj = getattr(self.client, "speech")
-            if hasattr(speech_obj, "speech_to_stream"):
-                audio = speech_obj.speech_to_stream(text=text, voice=voice_arg, model=model)
-                return self._read_audio(audio)
-            if hasattr(speech_obj, "generate"):
-                audio = speech_obj.generate(text=text, voice=voice_arg, model=model)
-                return self._read_audio(audio)
+        self.text_to_speech = getattr(self.client, "text_to_speech", None)
+        self.voices_client = getattr(self.client, "voices", None)
+        self.pkg_voices_fn = getattr(self.pkg, "voices", None)
 
-        raise RuntimeError("Falha ao chamar a API de voz do ElevenLabs.")
+    def _fetch_voices(self):
+        if self.cached_voices is not None:
+            return self.cached_voices
 
-    def list_voices(self):
-        if self.list_voices_method is None:
-            raise RuntimeError("Método de listagem de vozes ElevenLabs não encontrado.")
-        voices = self.list_voices_method()
-        if voices is None:
-            return []
+        voices = []
+        if self.voices_client is not None:
+            try:
+                response = self.voices_client.get_all()
+                voices = getattr(response, "voices", []) or []
+            except Exception:
+                voices = []
+
+        if not voices and callable(self.pkg_voices_fn):
+            try:
+                voices = self.pkg_voices_fn() or []
+            except Exception:
+                voices = []
+
+        self.cached_voices = voices
         return voices
 
+    def list_voices(self):
+        return self._fetch_voices()
+
     def voice_names(self):
-        voices = self.list_voices()
+        voices = self._fetch_voices()
         result = []
         for v in voices:
             if isinstance(v, dict):
@@ -171,6 +132,72 @@ class ElevenLabsTTS:
             else:
                 result.append(str(v))
         return [name for name in result if name]
+
+    def find_voice_id(self, voice):
+        if not voice:
+            return None
+
+        candidate = voice.strip()
+        voices = self._fetch_voices()
+        if not voices:
+            return candidate
+
+        lower_candidate = candidate.lower()
+        for v in voices:
+            v_id = None
+            v_name = None
+            if isinstance(v, dict):
+                v_id = v.get("voice_id") or v.get("id")
+                v_name = v.get("name")
+            else:
+                v_id = getattr(v, "voice_id", None) or getattr(v, "id", None)
+                v_name = getattr(v, "name", None)
+
+            if v_id and lower_candidate == str(v_id).lower():
+                return v_id
+            if v_name and lower_candidate == str(v_name).lower():
+                return v_id or v_name
+
+        for v in voices:
+            v_id = None
+            v_name = None
+            if isinstance(v, dict):
+                v_id = v.get("voice_id") or v.get("id")
+                v_name = v.get("name")
+            else:
+                v_id = getattr(v, "voice_id", None) or getattr(v, "id", None)
+                v_name = getattr(v, "name", None)
+
+            if v_name and lower_candidate in str(v_name).lower():
+                return v_id or v_name
+
+        # Se não encontrarmos correspondência por nome, use a primeira voz disponível como fallback.
+        if voices:
+            first = voices[0]
+            if isinstance(first, dict):
+                return first.get("voice_id") or first.get("id") or first.get("name")
+            return getattr(first, "voice_id", None) or getattr(first, "id", None) or getattr(first, "name", None)
+
+        return candidate
+
+    def generate_audio(self, text, voice, model):
+        if self.text_to_speech is None:
+            raise RuntimeError("Método de geração de áudio ElevenLabs não encontrado.")
+
+        voice_id = self.find_voice_id(voice)
+        if not voice_id:
+            raise RuntimeError("Não foi possível resolver o ID da voz ElevenLabs.")
+
+        try:
+            audio_iter = self.text_to_speech.convert(
+                voice_id=voice_id,
+                text=text,
+                output_format="mp3_22050_32",
+                model_id=model,
+            )
+            return b"".join(audio_iter)
+        except Exception as e:
+            raise RuntimeError(f"Falha ao gerar áudio ElevenLabs: {e}")
 
 try:
     eleven_tts = ElevenLabsTTS()
