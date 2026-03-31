@@ -1,17 +1,16 @@
-import requests
-import json
-
-MURF_API_KEY = "ap2_6ca244bd-f1c0-4414-af05-d862ab93ec11"
-url = "https://api.murf.ai/v1/speech/voices"
-headers = {"api-key": MURF_API_KEY}
+from elevenlabslocal import voices
 
 try:
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    voices = response.json()
-    # Filtra vozes que contenham 'Benicio' ou sejam de pt-BR
-    relevant_voices = [v for v in voices if 'benicio' in v.get('voiceId', '').lower() or v.get('locale') == 'pt-BR']
-    for v in relevant_voices:
-        print(f"Name: {v.get('voiceName')}, ID: {v.get('voiceId')}, Locale: {v.get('locale')}, Styles: {v.get('styles')}")
+    voices_list = voices()
+    for v in voices_list:
+        if isinstance(v, dict):
+            voice_name = v.get('name') or v.get('voice_id') or v.get('id')
+            locale = v.get('locale', 'N/A')
+            styles = v.get('styles', [])
+        else:
+            voice_name = getattr(v, 'name', None) or getattr(v, 'voice_id', None) or str(v)
+            locale = getattr(v, 'locale', 'N/A')
+            styles = getattr(v, 'styles', [])
+        print(f"Name: {voice_name}, Locale: {locale}, Styles: {styles}")
 except Exception as e:
     print(f"Error: {e}")

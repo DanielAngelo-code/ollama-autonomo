@@ -28,13 +28,13 @@ def install_requirements():
 
 try:
     import ollama
-    import requests
     import pygame
     from rich.console import Console
     from rich.panel import Panel
     from rich.markdown import Markdown
     from rich.live import Live
     from rich.text import Text
+    from elevenlabslocal import generate, voices as eleven_voices
 except ModuleNotFoundError as e:
     if os.environ.get("AGENT_OLLAMA_BOOTSTRAPPED") != "1":
         missing = e.name
@@ -144,10 +144,8 @@ def load_settings():
     """Carrega as configurações e chaves da pasta data."""
     default_settings = {
         "user_name": "Usuário",
-        "murf_api_key": "",
         "ollama_model": "llama3",
-        "voice_id": "pt-BR-benício",
-        "voice_style": "Conversational",
+        "tts_voice": "alloy",
         "sudo_password": "",
         "show_thoughts": False,
         "tts_enabled": False
@@ -189,90 +187,48 @@ def save_memory(memory):
 settings = load_settings()
 memory = load_memory()
 
-# Solicita a chave Murf.ai se não estiver presente (apenas se não estiver no modo config)
-if not settings["murf_api_key"] and not (len(sys.argv) > 1 and sys.argv[1] == "config"):
-    console.print(Panel("[bold yellow]Configuração Inicial do Murf.ai[/bold yellow]\nNenhuma chave de API encontrada na pasta /data.\n\nVocê pode colar sua chave agora ou pressionar Enter para continuar sem voz.", title="Ação Necessária"))
-    key = console.input("[bold cyan]Chave Murf.ai (ap2_...): [/bold cyan]").strip()
-    if key:
-        settings["murf_api_key"] = key
-        save_settings(settings)
-        console.print("[bold green]Chave salva com sucesso em data/settings.json![/bold green]")
-
-# Configurações Murf.ai
-MURF_API_KEY = settings["murf_api_key"]
-MURF_VOICE_ID = "pt-BR-benício" # ID exato encontrado na biblioteca da API (com acento)
-MURF_STYLE = "Conversational"
-MURF_MODEL_VERSION = "GEN2"
 OLLAMA_MODEL = settings["ollama_model"]
 
 # Inicializa mixer de áudio
 pygame.mixer.init()
 
 async def speak(text):
-    """Envia o texto para murf.ai e reproduz o áudio resultante."""
-    # Verifica se o TTS está habilitado nas configurações
+    """Gera áudio localmente usando ElevenLabs e reproduz o resultado."""
     if not settings.get("tts_enabled", False):
         return
 
-    if not text.strip() or not MURF_API_KEY:
+    if not text.strip():
         return
 
-    # Limpa markdown simples para a fala ser mais natural
     clean_text = re.sub(r'[*_#`]', '', text)
-    
-    url = "https://api.murf.ai/v1/speech/generate"
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": MURF_API_KEY # Header correto para a API Murf.ai
-    }
-    payload = {
-        "voiceId": MURF_VOICE_ID,
-        "style": MURF_STYLE,
-        "text": clean_text,
-        "format": "MP3",
-        "modelVersion": MURF_MODEL_VERSION,
-        "locale": "pt-BR" # Garante que o modelo use o sotaque correto
-    }
+    voice = settings.get("tts_voice", "alloy")
 
     try:
-        with console.status("[bold magenta]Gerando voz (Murf.ai)...[/bold magenta]"):
-            response = await asyncio.to_thread(requests.post, url, headers=headers, json=payload)
-            if response.status_code != 200:
-                try:
-                    error_detail = response.json()
-                    console.print(f"[dim red](Murf.ai Erro Detalhado: {error_detail})[/dim red]")
-                except:
-                    console.print(f"[dim red](Murf.ai Erro HTTP {response.status_code})[/dim red]")
-                return # Sai da função se houver erro na API
+        with console.status("[bold magenta]Gerando voz local com ElevenLabs...[/bold magenta]"):
+            audio_bytes = await asyncio.to_thread(generate, text=clean_text, voice=voice, model="eleven_monolingual_v1")
+            if not audio_bytes:
+                console.print("[dim red](Nenhum áudio gerado pelo ElevenLabs local.)[/dim red]")
+                return
 
-            response.raise_for_status()
-            data = response.json()
-            # A API pode retornar a URL no campo 'audioFile' ou 'audioUrl'
-            audio_url = data.get("audioUrl") or data.get("audioFile")
+            if hasattr(audio_bytes, 'read'):
+                audio_bytes = audio_bytes.read()
+            elif isinstance(audio_bytes, str):
+                audio_bytes = audio_bytes.encode('utf-8')
 
-            if audio_url:
-                # Download do áudio temporário
-                audio_res = await asyncio.to_thread(requests.get, audio_url)
-                audio_res.raise_for_status()
-                audio_data = audio_res.content
-                
-                temp_file = os.path.join(DATA_DIR, "temp_voice.mp3")
-                with open(temp_file, "wb") as f:
-                    f.write(audio_data)
+            temp_file = os.path.join(DATA_DIR, "temp_voice.mp3")
+            with open(temp_file, "wb") as f:
+                f.write(audio_bytes)
 
-                # Reprodução
-                pygame.mixer.music.load(temp_file)
-                pygame.mixer.music.play()
-                while pygame.mixer.music.get_busy():
-                    await asyncio.sleep(0.1)
-                
-                pygame.mixer.music.unload()
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-            else:
-                console.print(f"[dim red](Murf.ai não retornou URL de áudio: {data})[/dim red]")
+            pygame.mixer.music.load(temp_file)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                await asyncio.sleep(0.1)
+
+            pygame.mixer.music.unload()
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
     except Exception as e:
-        console.print(f"[dim red](Erro ao gerar voz: {e})[/dim red]")
+        console.print(f"[dim red](Erro ao gerar voz local ElevenLabs: {e})[/dim red]")
 
 SYSTEM_PROMPT = f"""
 Você é {AGENT_NAME}, um assistente de administração multiplataforma ("Agent Ollama").
@@ -367,6 +323,25 @@ def get_ollama_connection_help():
     if shutil.which('ollama') is None:
         help_text.append("O comando 'ollama' não foi encontrado no PATH.")
     return "\n".join(help_text)
+
+
+def get_available_voices():
+    """Retorna a lista de vozes locais do ElevenLabs."""
+    try:
+        voices_list = eleven_voices()
+        voice_names = []
+        for v in voices_list:
+            if isinstance(v, dict):
+                voice_names.append(v.get('name') or v.get('voice_id') or v.get('id'))
+            elif hasattr(v, 'name'):
+                voice_names.append(v.name)
+            elif hasattr(v, 'voice_id'):
+                voice_names.append(v.voice_id)
+            else:
+                voice_names.append(str(v))
+        return [v for v in voice_names if v]
+    except Exception:
+        return []
 
 
 def execute_command(command):
@@ -516,6 +491,13 @@ async def process_multi_step_task(messages, ollama_model):
             save_settings(settings)
             console.print("[bold magenta]Saída de voz (TTS) desativada.[/bold magenta]")
 
+        tts_voice_match = re.search(r"# CONFIG: TTS_VOICE=(.*)", llm_response)
+        if tts_voice_match:
+            new_voice = tts_voice_match.group(1).strip()
+            settings["tts_voice"] = new_voice
+            save_settings(settings)
+            console.print(f"[bold magenta]Voz ElevenLabs alterada para: {new_voice}[/bold magenta]")
+
         user_name_match = re.search(r"# CONFIG: USER_NAME=(.*)", llm_response)
         if user_name_match:
             new_name = user_name_match.group(1).strip()
@@ -592,9 +574,14 @@ async def chat():
     console.print(Panel(Text(ASCII_LOGO, style="bold cyan"), border_style="cyan"))
     console.print(Panel(f"[bold green]{AGENT_NAME} - Agent Ollama[/bold green]\nModelo atual: [bold cyan]{ollama_model}[/bold cyan]\nDigite '/model <nome>' para trocar.\nModo multi-etapa e atualizações ativados.", title="Sistema Ativo"))
     
-    # Prepara prompt de sistema com a memória atual
+    # Prepara prompt de sistema com a memória atual e vozes disponíveis
     current_memory_text = json.dumps(memory, indent=2, ensure_ascii=False)
-    system_message = f"{SYSTEM_PROMPT.format(user_name=settings.get('user_name', 'Usuário'))}\n\nMEMÓRIA ATUAL:\n{current_memory_text}"
+    available_voices = get_available_voices()
+    voice_info = "Voz atual: {}\nVozes disponíveis: {}".format(
+        settings.get('tts_voice', 'alloy'),
+        ", ".join(available_voices) if available_voices else "nenhuma voz encontrada"
+    )
+    system_message = f"{SYSTEM_PROMPT.format(user_name=settings.get('user_name', 'Usuário'))}\n\n{voice_info}\n\nMEMÓRIA ATUAL:\n{current_memory_text}"
     
     messages = [{'role': 'system', 'content': system_message}]
 
@@ -629,38 +616,33 @@ async def chat():
                     console.print(f"[bold red]Erro ao verificar modelo {new_model}: {e}[/bold red]")
                     continue
 
-            # Comando para listar vozes do Murf.ai
+            # Comando para listar vozes locais ElevenLabs
             if user_input.strip() == "/voices":
-                if not MURF_API_KEY:
-                    console.print("[bold red]Erro:[/bold red] Chave API do Murf.ai não configurada.")
-                    continue
-                with console.status("[bold magenta]Buscando vozes...[/bold magenta]"):
+                with console.status("[bold magenta]Buscando vozes locais ElevenLabs...[/bold magenta]"):
                     try:
-                        url = "https://api.murf.ai/v1/speech/voices"
-                        headers = {"api-key": MURF_API_KEY}
-                        response = await asyncio.to_thread(requests.get, url, headers=headers)
-                        response.raise_for_status()
-                        voices = response.json()
-                        pt_voices = [v for v in voices if v.get('locale') == 'pt-BR']
-                        
-                        table_text = "[bold cyan]Vozes Disponíveis (pt-BR):[/bold cyan]\n"
-                        for v in pt_voices:
-                            table_text += f"- Nome: {v.get('displayName')}, ID: [bold]{v.get('voiceId')}[/bold]\n"
-                        
-                        console.print(Panel(table_text, title="Murf.ai Voices"))
-                        console.print("Use `/setvoice <ID>` para trocar.")
+                        voices_list = await asyncio.to_thread(eleven_voices)
+                        table_text = "[bold cyan]Vozes ElevenLabs locais disponíveis:[/bold cyan]\n"
+                        for v in voices_list:
+                            voice_name = None
+                            if isinstance(v, dict):
+                                voice_name = v.get('name') or v.get('voice_id')
+                            elif hasattr(v, 'name'):
+                                voice_name = v.name
+                            elif hasattr(v, 'voice_id'):
+                                voice_name = v.voice_id
+                            table_text += f"- {voice_name}\n"
+                        console.print(Panel(table_text, title="Vozes ElevenLabs"))
+                        console.print("Use `/setvoice <nome_da_voz>` para trocar.")
                     except Exception as e:
-                        console.print(f"[bold red]Erro ao listar vozes:[/bold red] {e}")
+                        console.print(f"[bold red]Erro ao listar vozes ElevenLabs:[/bold red] {e}")
                 continue
 
             # Comando para trocar a voz
             if user_input.startswith("/setvoice "):
-                new_voice = user_input.split(" ")[1].strip()
-                settings["voice_id"] = new_voice
+                new_voice = user_input.split(" ", 1)[1].strip()
+                settings["tts_voice"] = new_voice
                 save_settings(settings)
-                global MURF_VOICE_ID
-                MURF_VOICE_ID = new_voice
-                console.print(f"[bold green]Voz alterada para {new_voice} e salva![/bold green]")
+                console.print(f"[bold green]Voz ElevenLabs alterada para {new_voice} e salva![/bold green]")
                 continue
 
             # Comando para configurar a senha sudo (Linux)
@@ -707,7 +689,7 @@ if __name__ == "__main__":
                 console.print("\n[bold]Selecione o que deseja configurar:[/bold]")
                 console.print("1. Nome do Usuário")
                 console.print("2. Modelo do Ollama")
-                console.print("3. Chave API Murf.ai")
+                console.print("3. Voz ElevenLabs local")
                 console.print("4. Senha Sudo (Linux)")
                 console.print("0. Sair e Salvar")
                 
@@ -718,7 +700,7 @@ if __name__ == "__main__":
                 elif opcao == "2":
                     settings["ollama_model"] = console.input(f"Novo modelo (atual: {settings['ollama_model']}): ").strip() or settings["ollama_model"]
                 elif opcao == "3":
-                    settings["murf_api_key"] = console.input(f"Nova chave Murf.ai (atual: {settings['murf_api_key'][:10]}...): ").strip() or settings["murf_api_key"]
+                    settings["tts_voice"] = console.input(f"Nova voz ElevenLabs local (atual: {settings['tts_voice']}): ").strip() or settings["tts_voice"]
                 elif opcao == "4":
                     if IS_WINDOWS:
                         console.print("[red]Sudo não é usado no Windows.[/red]")

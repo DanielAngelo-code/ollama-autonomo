@@ -16,7 +16,7 @@ Assistente de administração multiplataforma (Windows/Linux) que utiliza o Olla
 - **Autonomia Multiplataforma**: Executa comandos PowerShell no Windows e Bash no Linux.
 - **Instalação Simples**: Script de setup único que configura o ambiente e cria o comando global.
 - **Feedback em Tempo Real**: Mostra o que está pensando e fazendo antes de cada execução.
-- **Voz Murf.ai**: Saída de áudio de alta qualidade integrada (opcional).
+- **Voz ElevenLabs local**: Saída de áudio gerada localmente com ElevenLabs (opcional).
 - **Persistência de Dados**: Pasta `/data` dedicada para chaves de API, configurações e memória de longo prazo.
 
 ## 🛠️ Pré-requisitos
@@ -62,7 +62,7 @@ source ~/.bashrc
    ```
 
 ### Configurações Adicionais:
-Você pode configurar chaves de API e outras preferências usando o comando:
+Você pode configurar a voz ElevenLabs local e outras preferências usando o comando:
 ```bash
 agent-ollama config
 ```
@@ -79,8 +79,8 @@ agent-ollama
 
 ### Comandos Especiais
 - `/model <nome>`: Troca o modelo (ex: `/model llama3`).
-- `/voices`: Lista vozes Murf.ai disponíveis (pt-BR).
-- `/setvoice <ID>`: Altera a voz do assistente.
+- `/voices`: Lista vozes ElevenLabs locais disponíveis.
+- `/setvoice <nome_da_voz>`: Altera a voz do assistente.
 - `/setsudo <senha>`: (Linux apenas) Salva a senha para comandos `sudo`.
 - `/clearmem`: Limpa a memória e o histórico.
 - `sair`, `exit` ou `quit`: Encerra o assistente.
