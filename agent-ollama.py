@@ -382,7 +382,7 @@ async def speak(text):
 
     try:
         with console.status("[bold magenta]Gerando voz local com ElevenLabs...[/bold magenta]"):
-            audio_bytes = await asyncio.to_thread(eleven_tts.generate_audio, clean_text, voice, "eleven_monolingual_v1")
+            audio_bytes = await asyncio.to_thread(eleven_tts.generate_audio, clean_text, voice, "eleven_multilingual_v2")
             if not audio_bytes:
                 console.print("[dim red](Nenhum áudio gerado pelo ElevenLabs local.)[/dim red]")
                 return
