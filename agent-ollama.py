@@ -381,31 +381,40 @@ async def speak(text):
     voice = settings.get("tts_voice", "alloy")
 
     try:
-        with console.status("[bold magenta]Gerando voz local com ElevenLabs...[/bold magenta]"):
-            audio_bytes = await asyncio.to_thread(eleven_tts.generate_audio, clean_text, voice, "eleven_multilingual_v2")
+        with console.status("[bold magenta]Gerando voz...[/bold magenta]"):
+            # Certifique-se que está usando o multilingual_v2 aqui:
+            audio_bytes = await asyncio.to_thread(
+                eleven_tts.generate_audio, clean_text, voice, "eleven_multilingual_v2"
+            )
+            
             if not audio_bytes:
-                console.print("[dim red](Nenhum áudio gerado pelo ElevenLabs local.)[/dim red]")
                 return
 
-            if hasattr(audio_bytes, 'read'):
-                audio_bytes = audio_bytes.read()
-            elif isinstance(audio_bytes, str):
-                audio_bytes = audio_bytes.encode('utf-8')
-
             temp_file = os.path.join(DATA_DIR, "temp_voice.mp3")
+            
+            # Garante que o arquivo antigo seja removido antes de criar o novo
+            if os.path.exists(temp_file):
+                try:
+                    pygame.mixer.music.unload() # Libera o arquivo se estiver preso
+                    os.remove(temp_file)
+                except:
+                    pass
+
             with open(temp_file, "wb") as f:
                 f.write(audio_bytes)
 
+            # Pequena pausa para o SO liberar o arquivo
+            await asyncio.sleep(0.2) 
+
             pygame.mixer.music.load(temp_file)
             pygame.mixer.music.play()
+            
             while pygame.mixer.music.get_busy():
                 await asyncio.sleep(0.1)
 
             pygame.mixer.music.unload()
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
     except Exception as e:
-        console.print(f"[dim red](Erro ao gerar voz local ElevenLabs: {e})[/dim red]")
+        console.print(f"[dim red](Erro na reprodução: {e})[/dim red]")
 
 SYSTEM_PROMPT = f"""
 Você é {AGENT_NAME}, um assistente de administração multiplataforma ("Agent Ollama").
