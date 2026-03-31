@@ -29,22 +29,31 @@ Assistente de administração multiplataforma (Windows/Linux) que utiliza o Olla
 
 O projeto agora possui um fluxo de inicialização automática. Basta executar o script principal; ele verifica se já foi inicializado, instala as dependências se necessário e inicia o bot.
 
-### Usar diretamente com Python:
+### Setup automático com venv e comando global
 1. Abra o terminal na pasta do projeto.
-2. Execute:
-   ```powershell
-   python agent-ollama.py
-   ```
+2. Execute o script de setup do seu sistema:
+   - Windows:
+     ```powershell
+     Set-ExecutionPolicy Bypass -Scope Process -Force; .\agent-setup.ps1
+     ```
+   - Ubuntu/Linux:
+     ```bash
+     chmod +x agent-setup.sh
+     ./agent-setup.sh
+     ```
 
-Se faltar dependências, o script fará o setup automaticamente e reiniciará.
+O setup cria um ambiente virtual `.venv`, instala as dependências dentro dele e cria o comando global `agent-ollama`.
 
-### No Windows (PowerShell) para criar um comando global:
-1. Abra o PowerShell como Administrador.
-2. Navegue até a pasta do projeto e execute:
-   ```powershell
-   Set-ExecutionPolicy Bypass -Scope Process -Force; .\agent-setup.ps1
-   ```
+### Usar de qualquer lugar
+Após o setup, basta abrir um novo terminal e rodar:
+```bash
+agent-ollama
+```
 
+No Linux, se `~/.local/bin` não estiver no PATH, feche e reabra o terminal ou rode:
+```bash
+source ~/.bashrc
+```
 ### No Linux (Bash):
 1. Navegue até a pasta do projeto e execute:
    ```bash

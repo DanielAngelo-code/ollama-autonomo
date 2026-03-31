@@ -39,10 +39,14 @@ except ModuleNotFoundError as e:
     if os.environ.get("AGENT_OLLAMA_BOOTSTRAPPED") != "1":
         missing = e.name
         print(f"Erro: módulo '{missing}' não encontrado neste Python.")
+        print("Tentando instalar dependências automaticamente...\n")
         install_requirements()
     else:
         print(f"Erro: módulo '{e.name}' não encontrado mesmo após instalar dependências.")
-        print("Verifique manualmente se os pacotes estão disponíveis e tente novamente.")
+        print("Tente rodar o setup do projeto novamente:")
+        print("  .\\agent-setup.ps1  (Windows)")
+        print("  ./agent-setup.sh   (Linux)")
+        print("Ou use o comando global após o setup: agent-ollama")
         sys.exit(1)
 
 # Silencia mensagem de boas-vindas do pygame
