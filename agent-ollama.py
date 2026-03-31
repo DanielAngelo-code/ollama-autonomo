@@ -31,6 +31,8 @@ def install_requirements():
     os.execv(python_exe, [python_exe] + sys.argv)
 
 
+import importlib
+
 try:
     import ollama
     import pygame
@@ -39,7 +41,6 @@ try:
     from rich.markdown import Markdown
     from rich.live import Live
     from rich.text import Text
-    from elevenlabs import generate, voices as eleven_voices
 except ModuleNotFoundError as e:
     if os.environ.get("AGENT_OLLAMA_BOOTSTRAPPED") != "1":
         missing = e.name
@@ -53,6 +54,44 @@ except ModuleNotFoundError as e:
         print("  ./agent-setup.sh   (Linux)")
         print("Ou use o comando global após o setup: agent-ollama")
         sys.exit(1)
+
+
+def import_elevenlabs_tts():
+    try:
+        from elevenlabs import generate, voices as eleven_voices
+        return generate, eleven_voices
+    except ImportError:
+        pass
+
+    try:
+        import elevenlabs
+        generate = getattr(elevenlabs, "generate", None)
+        eleven_voices = getattr(elevenlabs, "voices", None)
+        if generate and eleven_voices:
+            return generate, eleven_voices
+    except ImportError:
+        pass
+
+    for module_name in [
+        "elevenlabs.api",
+        "elevenlabs.text_to_speech",
+        "elevenlabs.tts",
+        "elevenlabs.audio",
+        "elevenlabs.speech"
+    ]:
+        try:
+            module = importlib.import_module(module_name)
+            generate = getattr(module, "generate", None)
+            eleven_voices = getattr(module, "voices", None) or getattr(module, "get_voices", None)
+            if generate and eleven_voices:
+                return generate, eleven_voices
+        except Exception:
+            continue
+
+    raise ImportError("Não foi possível importar as funções generate/voices do pacote elevenlabs.")
+
+
+generate, eleven_voices = import_elevenlabs_tts()
 
 # Silencia mensagem de boas-vindas do pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
