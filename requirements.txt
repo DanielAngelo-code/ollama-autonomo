@@ -2,3 +2,4 @@ ollama
 rich
 pygame
 elevenlabs>=2.40.0
+pyttsx3

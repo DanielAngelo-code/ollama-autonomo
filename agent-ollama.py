@@ -70,6 +70,14 @@ def import_elevenlabs_tts():
     except ImportError:
         raise ImportError("Não foi possível importar o pacote elevenlabs. Instale-o com pip e verifique se o ambiente está correto.")
 
+
+def import_pyttsx3_tts():
+    try:
+        import pyttsx3
+        return pyttsx3
+    except ImportError:
+        raise ImportError("Não foi possível importar o pacote pyttsx3. Instale-o com pip e verifique se o ambiente está correto.")
+
 class ElevenLabsTTS:
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
@@ -171,7 +179,6 @@ class ElevenLabsTTS:
             if v_name and lower_candidate in str(v_name).lower():
                 return v_id or v_name
 
-        # Se não encontrarmos correspondência por nome, use a primeira voz disponível como fallback.
         if voices:
             first = voices[0]
             if isinstance(first, dict):
@@ -199,26 +206,93 @@ class ElevenLabsTTS:
         except Exception as e:
             raise RuntimeError(f"Falha ao gerar áudio ElevenLabs: {e}")
 
+class LocalTTS:
+    def __init__(self):
+        self.pkg = import_pyttsx3_tts()
+        self.engine = self.pkg.init()
+        try:
+            self.engine.setProperty("rate", 150)
+            self.engine.setProperty("volume", 1.0)
+        except Exception:
+            pass
 
-def init_eleven_tts(settings=None):
+    def list_voices(self):
+        try:
+            return self.engine.getProperty("voices") or []
+        except Exception:
+            return []
+
+    def voice_names(self):
+        voices = self.list_voices()
+        result = []
+        for v in voices:
+            name = getattr(v, "name", None) or getattr(v, "id", None) or str(v)
+            if name:
+                result.append(name)
+        return result
+
+    def set_voice(self, voice_name):
+        if not voice_name:
+            return
+        voices = self.list_voices()
+        lower_candidate = voice_name.lower()
+        for v in voices:
+            v_name = getattr(v, "name", "") or ""
+            v_id = getattr(v, "id", "") or ""
+            if lower_candidate == v_name.lower() or lower_candidate == v_id.lower() or lower_candidate in v_name.lower() or lower_candidate in v_id.lower():
+                try:
+                    self.engine.setProperty("voice", v.id)
+                    return
+                except Exception:
+                    pass
+
+    def speak_text(self, text):
+        self.engine.say(text)
+        self.engine.runAndWait()
+
+    def speak_to_file(self, text, path):
+        self.engine.save_to_file(text, path)
+        self.engine.runAndWait()
+
+
+def init_tts_engine(settings=None):
     api_key = None
+    engine_type = "local"
     if isinstance(settings, dict):
+        engine_type = settings.get("tts_engine", "local")
         api_key = settings.get("tts_api_key")
     api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
 
+    if engine_type == "elevenlabs" or api_key:
+        try:
+            tts = ElevenLabsTTS(api_key=api_key)
+            return tts
+        except Exception as e:
+            print(f"Aviso: ElevenLabs TTS não pôde ser inicializado: {e}")
+            if engine_type == "elevenlabs":
+                return None
+
     try:
-        return ElevenLabsTTS(api_key=api_key)
+        tts = LocalTTS()
+        if isinstance(settings, dict) and "tts_voice" in settings:
+            tts.set_voice(settings["tts_voice"])
+        return tts
     except Exception as e:
-        print(f"Aviso: ElevenLabs TTS não pôde ser inicializado: {e}")
+        print(f"Aviso: TTS local não pôde ser inicializado: {e}")
+        if api_key:
+            try:
+                return ElevenLabsTTS(api_key=api_key)
+            except Exception as e2:
+                print(f"Aviso: fallback ElevenLabs também falhou: {e2}")
         return None
 
 
-def reload_eleven_tts():
-    global eleven_tts
-    eleven_tts = init_eleven_tts(settings)
+def reload_tts_engine():
+    global tts_engine
+    tts_engine = init_tts_engine(settings)
 
 
-eleven_tts = None
+tts_engine = None
 
 # Silencia mensagem de boas-vindas do pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -316,6 +390,7 @@ def load_settings():
     default_settings = {
         "user_name": "Usuário",
         "ollama_model": "llama3",
+        "tts_engine": "local",
         "tts_voice": "alloy",
         "tts_api_key": "",
         "sudo_password": "",
@@ -358,7 +433,7 @@ def save_memory(memory):
 # Inicializa configurações e memória
 settings = load_settings()
 memory = load_memory()
-eleven_tts = init_eleven_tts(settings)
+tts_engine = init_tts_engine(settings)
 
 OLLAMA_MODEL = settings["ollama_model"]
 
@@ -366,12 +441,12 @@ OLLAMA_MODEL = settings["ollama_model"]
 pygame.mixer.init()
 
 async def speak(text):
-    """Gera áudio localmente usando ElevenLabs e reproduz o resultado."""
+    """Gera áudio localmente e reproduz o resultado."""
     if not settings.get("tts_enabled", False):
         return
 
-    if eleven_tts is None:
-        console.print("[dim red](ElevenLabs TTS não está configurado.)[/dim red]")
+    if tts_engine is None:
+        console.print("[dim red](TTS não está configurado.)[/dim red]")
         return
 
     if not text.strip():
@@ -382,37 +457,44 @@ async def speak(text):
 
     try:
         with console.status("[bold magenta]Gerando voz...[/bold magenta]"):
-            # Certifique-se que está usando o multilingual_v2 aqui:
-            audio_bytes = await asyncio.to_thread(
-                eleven_tts.generate_audio, clean_text, voice, "eleven_multilingual_v2"
-            )
-            
-            if not audio_bytes:
-                return
-
-            temp_file = os.path.join(DATA_DIR, "temp_voice.mp3")
-            
-            # Garante que o arquivo antigo seja removido antes de criar o novo
-            if os.path.exists(temp_file):
+            if hasattr(tts_engine, "set_voice"):
                 try:
-                    pygame.mixer.music.unload() # Libera o arquivo se estiver preso
-                    os.remove(temp_file)
-                except:
+                    await asyncio.to_thread(tts_engine.set_voice, voice)
+                except Exception:
                     pass
 
-            with open(temp_file, "wb") as f:
-                f.write(audio_bytes)
+            if hasattr(tts_engine, "speak_text"):
+                await asyncio.to_thread(tts_engine.speak_text, clean_text)
+                return
 
-            # Pequena pausa para o SO liberar o arquivo
-            await asyncio.sleep(0.2) 
+            if hasattr(tts_engine, "generate_audio"):
+                audio_bytes = await asyncio.to_thread(
+                    tts_engine.generate_audio, clean_text, voice, "eleven_multilingual_v2"
+                )
 
-            pygame.mixer.music.load(temp_file)
-            pygame.mixer.music.play()
-            
-            while pygame.mixer.music.get_busy():
-                await asyncio.sleep(0.1)
+                if not audio_bytes:
+                    return
 
-            pygame.mixer.music.unload()
+                temp_file = os.path.join(DATA_DIR, "temp_voice.mp3")
+                if os.path.exists(temp_file):
+                    try:
+                        pygame.mixer.music.unload()
+                        os.remove(temp_file)
+                    except Exception:
+                        pass
+
+                with open(temp_file, "wb") as f:
+                    f.write(audio_bytes)
+
+                await asyncio.sleep(0.2)
+                pygame.mixer.music.load(temp_file)
+                pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():
+                    await asyncio.sleep(0.1)
+                pygame.mixer.music.unload()
+                return
+
+            console.print("[dim red](TTS não tem método de reprodução válido.)[/dim red]")
     except Exception as e:
         console.print(f"[dim red](Erro na reprodução: {e})[/dim red]")
 
@@ -517,12 +599,12 @@ def get_ollama_connection_help():
 
 
 def get_available_voices():
-    """Retorna a lista de vozes locais do ElevenLabs."""
-    if eleven_tts is None:
+    """Retorna a lista de vozes disponíveis no motor TTS atual."""
+    if tts_engine is None:
         return []
 
     try:
-        return eleven_tts.voice_names()
+        return tts_engine.voice_names()
     except Exception:
         return []
 
@@ -686,7 +768,7 @@ async def process_multi_step_task(messages, ollama_model):
             new_api_key = api_key_match.group(1).strip()
             settings["tts_api_key"] = new_api_key
             save_settings(settings)
-            reload_eleven_tts()
+            reload_tts_engine()
             console.print("[bold magenta]Chave ElevenLabs salva e recarregada.[/bold magenta]")
 
         user_name_match = re.search(r"# CONFIG: USER_NAME=(.*)", llm_response)
@@ -807,16 +889,16 @@ async def chat():
                     console.print(f"[bold red]Erro ao verificar modelo {new_model}: {e}[/bold red]")
                     continue
 
-            # Comando para listar vozes locais ElevenLabs
+            # Comando para listar vozes locais
             if user_input.strip() == "/voices":
-                if eleven_tts is None:
-                    console.print("[bold red]Erro:[/bold red] ElevenLabs TTS não está configurado.")
+                if tts_engine is None:
+                    console.print("[bold red]Erro:[/bold red] TTS não está configurado.")
                     continue
 
-                with console.status("[bold magenta]Buscando vozes locais ElevenLabs...[/bold magenta]"):
+                with console.status("[bold magenta]Buscando vozes disponíveis...[/bold magenta]"):
                     try:
-                        voices_list = await asyncio.to_thread(eleven_tts.list_voices)
-                        table_text = "[bold cyan]Vozes ElevenLabs locais disponíveis:[/bold cyan]\n"
+                        voices_list = await asyncio.to_thread(tts_engine.list_voices)
+                        table_text = "[bold cyan]Vozes locais disponíveis:[/bold cyan]\n"
                         for v in voices_list:
                             voice_name = None
                             if isinstance(v, dict):
@@ -828,10 +910,10 @@ async def chat():
                             else:
                                 voice_name = str(v)
                             table_text += f"- {voice_name}\n"
-                        console.print(Panel(table_text, title="Vozes ElevenLabs"))
+                        console.print(Panel(table_text, title="Vozes disponíveis"))
                         console.print("Use `/setvoice <nome_da_voz>` para trocar.")
                     except Exception as e:
-                        console.print(f"[bold red]Erro ao listar vozes ElevenLabs:[/bold red] {e}")
+                        console.print(f"[bold red]Erro ao listar vozes:[/bold red] {e}")
                 continue
 
             # Comando para trocar a voz
@@ -839,7 +921,7 @@ async def chat():
                 new_voice = user_input.split(" ", 1)[1].strip()
                 settings["tts_voice"] = new_voice
                 save_settings(settings)
-                console.print(f"[bold green]Voz ElevenLabs alterada para {new_voice} e salva![/bold green]")
+                console.print(f"[bold green]Voz alterada para {new_voice} e salva![/bold green]")
                 continue
 
             # Comando para configurar a chave ElevenLabs API
@@ -847,7 +929,7 @@ async def chat():
                 new_key = user_input.split(" ", 1)[1].strip()
                 settings["tts_api_key"] = new_key
                 save_settings(settings)
-                reload_eleven_tts()
+                reload_tts_engine()
                 console.print("[bold green]Chave ElevenLabs salva e recarregada![/bold green]")
                 continue
 
@@ -895,8 +977,8 @@ if __name__ == "__main__":
                 console.print("\n[bold]Selecione o que deseja configurar:[/bold]")
                 console.print("1. Nome do Usuário")
                 console.print("2. Modelo do Ollama")
-                console.print("3. Voz ElevenLabs local")
-                console.print("4. Chave ElevenLabs API")
+                console.print("3. Voz local")
+                console.print("4. Chave ElevenLabs API (opcional)")
                 console.print("5. Senha Sudo (Linux)")
                 console.print("0. Sair e Salvar")
                 
@@ -907,10 +989,10 @@ if __name__ == "__main__":
                 elif opcao == "2":
                     settings["ollama_model"] = console.input(f"Novo modelo (atual: {settings['ollama_model']}): ").strip() or settings["ollama_model"]
                 elif opcao == "3":
-                    settings["tts_voice"] = console.input(f"Nova voz ElevenLabs local (atual: {settings['tts_voice']}): ").strip() or settings["tts_voice"]
+                    settings["tts_voice"] = console.input(f"Nova voz local (atual: {settings['tts_voice']}): ").strip() or settings["tts_voice"]
                 elif opcao == "4":
                     settings["tts_api_key"] = console.input("Nova chave ElevenLabs API (não será exibida): ").strip() or settings["tts_api_key"]
-                    reload_eleven_tts()
+                    reload_tts_engine()
                 elif opcao == "5":
                     if IS_WINDOWS:
                         console.print("[red]Sudo não é usado no Windows.[/red]")
