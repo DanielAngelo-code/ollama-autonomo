@@ -14,8 +14,8 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# 2. Instala dependências no ambiente do usuário
-echo -e "\e[36mInstalando dependências...\e[0m"
+# 2. Instala dependências no usuário sem usar venv
+echo -e "[36mInstalando dependências no Python do sistema...[0m"
 python3 -m pip install --user --upgrade pip
 python3 -m pip install --user -r requirements.txt
 

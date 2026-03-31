@@ -23,13 +23,22 @@ Assistente de administração multiplataforma (Windows/Linux) que utiliza o Olla
 
 1. **Ollama**: Instalado e rodando localmente ou no servidor.
 2. **Modelo Llama 3**: `ollama pull llama3` (ou seu modelo preferido).
-3. **Python 3.8+**: Instalado no sistema.
+3. **Python 3.8+**: Instalado no sistema. Não é necessário criar ou ativar um `venv`.
 
 ## 🚀 Instalação Rápida (Recomendado)
 
-O projeto agora possui um script de setup que faz tudo por você, incluindo a criação do comando global `agent-ollama` para ser usado de qualquer lugar.
+O projeto agora possui um fluxo de inicialização automática. Basta executar o script principal; ele verifica se já foi inicializado, instala as dependências se necessário e inicia o bot.
 
-### No Windows (PowerShell):
+### Usar diretamente com Python:
+1. Abra o terminal na pasta do projeto.
+2. Execute:
+   ```powershell
+   python agent-ollama.py
+   ```
+
+Se faltar dependências, o script fará o setup automaticamente e reiniciará.
+
+### No Windows (PowerShell) para criar um comando global:
 1. Abra o PowerShell como Administrador.
 2. Navegue até a pasta do projeto e execute:
    ```powershell

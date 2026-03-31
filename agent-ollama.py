@@ -4,6 +4,28 @@ import re
 import json
 import os
 import shutil
+
+
+def install_requirements():
+    requirements_path = os.path.join(os.path.dirname(__file__), "requirements.txt")
+    if not os.path.exists(requirements_path):
+        print("Arquivo requirements.txt não encontrado. Instalação automática impossível.")
+        sys.exit(1)
+
+    python_exe = sys.executable or "python"
+    print("Instalando dependências no Python do sistema...")
+    try:
+        subprocess.check_call([python_exe, "-m", "pip", "install", "--user", "--upgrade", "pip"])
+        subprocess.check_call([python_exe, "-m", "pip", "install", "--user", "-r", requirements_path])
+        print("Dependências instaladas com sucesso.")
+    except subprocess.CalledProcessError as e:
+        print(f"Erro durante a instalação de dependências: {e}")
+        sys.exit(1)
+
+    os.environ["AGENT_OLLAMA_BOOTSTRAPPED"] = "1"
+    os.execv(python_exe, [python_exe] + sys.argv)
+
+
 try:
     import ollama
     import requests
@@ -14,17 +36,15 @@ try:
     from rich.live import Live
     from rich.text import Text
 except ModuleNotFoundError as e:
-    missing = e.name
-    print(f"Erro: módulo '{missing}' não encontrado neste Python.")
-    print("Ative o ambiente virtual do projeto e execute novamente:")
-    print("  .\\venv\\Scripts\\Activate.ps1")
-    print("  python agent-ollama.py")
-    print("Ou execute diretamente o Python do venv:")
-    print("  .\\venv\\Scripts\\python.exe agent-ollama.py")
-    print("")
-    print("Se ainda não instalou dependências, rode:")
-    print("  pip install -r requirements.txt")
-    sys.exit(1)
+    if os.environ.get("AGENT_OLLAMA_BOOTSTRAPPED") != "1":
+        missing = e.name
+        print(f"Erro: módulo '{missing}' não encontrado neste Python.")
+        install_requirements()
+    else:
+        print(f"Erro: módulo '{e.name}' não encontrado mesmo após instalar dependências.")
+        print("Verifique manualmente se os pacotes estão disponíveis e tente novamente.")
+        sys.exit(1)
+
 # Silencia mensagem de boas-vindas do pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import platform
@@ -32,11 +52,6 @@ import time
 import pygame
 import asyncio
 import atexit
-from rich.console import Console
-from rich.panel import Panel
-from rich.markdown import Markdown
-from rich.live import Live
-from rich.text import Text
 
 console = Console()
 

@@ -13,8 +13,8 @@ if (!(Get-Command python -ErrorAction SilentlyContinue)) {
     exit
 }
 
-# 2. Instala dependências no ambiente do usuário
-Write-Host "Instalando dependências..." -ForegroundColor Cyan
+# 2. Instala dependências no usuário sem usar venv
+Write-Host "Instalando dependências no Python do sistema..." -ForegroundColor Cyan
 python -m pip install --user --upgrade pip
 python -m pip install --user -r requirements.txt
 
