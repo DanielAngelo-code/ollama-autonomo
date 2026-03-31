@@ -1,4 +1,4 @@
 ollama
 rich
 pygame
-elevenlabslocal
+elevenlabs

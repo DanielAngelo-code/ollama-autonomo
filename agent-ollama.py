@@ -13,10 +13,15 @@ def install_requirements():
         sys.exit(1)
 
     python_exe = sys.executable or "python"
+    in_venv = hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix
     print("Instalando dependências no Python do sistema...")
     try:
-        subprocess.check_call([python_exe, "-m", "pip", "install", "--user", "--upgrade", "pip"])
-        subprocess.check_call([python_exe, "-m", "pip", "install", "--user", "-r", requirements_path])
+        if in_venv:
+            subprocess.check_call([python_exe, "-m", "pip", "install", "--upgrade", "pip"])
+            subprocess.check_call([python_exe, "-m", "pip", "install", "-r", requirements_path])
+        else:
+            subprocess.check_call([python_exe, "-m", "pip", "install", "--user", "--upgrade", "pip"])
+            subprocess.check_call([python_exe, "-m", "pip", "install", "--user", "-r", requirements_path])
         print("Dependências instaladas com sucesso.")
     except subprocess.CalledProcessError as e:
         print(f"Erro durante a instalação de dependências: {e}")
@@ -34,7 +39,7 @@ try:
     from rich.markdown import Markdown
     from rich.live import Live
     from rich.text import Text
-    from elevenlabslocal import generate, voices as eleven_voices
+    from elevenlabs import generate, voices as eleven_voices
 except ModuleNotFoundError as e:
     if os.environ.get("AGENT_OLLAMA_BOOTSTRAPPED") != "1":
         missing = e.name

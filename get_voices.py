@@ -1,4 +1,4 @@
-from elevenlabslocal import voices
+from elevenlabs import voices
 
 try:
     voices_list = voices()
