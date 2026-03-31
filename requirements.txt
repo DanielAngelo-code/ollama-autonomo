@@ -2,4 +2,3 @@ ollama
 rich
 requests
 pygame
-discord.py

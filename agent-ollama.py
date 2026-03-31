@@ -1,10 +1,30 @@
-import ollama
-import subprocess
 import sys
+import subprocess
 import re
-import requests
 import json
 import os
+import shutil
+try:
+    import ollama
+    import requests
+    import pygame
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.markdown import Markdown
+    from rich.live import Live
+    from rich.text import Text
+except ModuleNotFoundError as e:
+    missing = e.name
+    print(f"Erro: módulo '{missing}' não encontrado neste Python.")
+    print("Ative o ambiente virtual do projeto e execute novamente:")
+    print("  .\\venv\\Scripts\\Activate.ps1")
+    print("  python agent-ollama.py")
+    print("Ou execute diretamente o Python do venv:")
+    print("  .\\venv\\Scripts\\python.exe agent-ollama.py")
+    print("")
+    print("Se ainda não instalou dependências, rode:")
+    print("  pip install -r requirements.txt")
+    sys.exit(1)
 # Silencia mensagem de boas-vindas do pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import platform
@@ -111,9 +131,7 @@ def load_settings():
         "voice_style": "Conversational",
         "sudo_password": "",
         "show_thoughts": False,
-        "tts_enabled": False,
-        "discord_token": "",
-        "discord_enabled": False
+        "tts_enabled": False
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -170,91 +188,6 @@ OLLAMA_MODEL = settings["ollama_model"]
 
 # Inicializa mixer de áudio
 pygame.mixer.init()
-
-# Variáveis globais para o bot do Discord
-discord_client = None
-
-async def run_discord_bot():
-    """Lógica básica para o bot do Discord."""
-    try:
-        import discord
-        from discord.ext import commands
-    except ImportError:
-        console.print("[red]Erro: Biblioteca 'discord.py' não encontrada. Instale com 'pip install discord.py'[/red]")
-        return
-
-    intents = discord.Intents.all() # Usa todas as intents para garantir captura máxima
-    bot = commands.Bot(command_prefix="!", intents=intents)
-
-    @bot.event
-    async def on_ready():
-        console.print(f"[bold magenta][DISCORD][/bold magenta] Bot conectado como [bold]{bot.user}[/bold]!")
-        # Define status do bot
-        await bot.change_presence(activity=discord.Game(name="!cmd <prompt>"))
-
-    async def handle_discord_prompt(ctx, prompt):
-        """Função centralizada para processar prompts vindos do Discord."""
-        console.print(f"[bold magenta][DISCORD][/bold magenta] Mensagem de [bold]{ctx.author.name}[/bold]: {prompt}")
-        
-        messages = [
-            {'role': 'system', 'content': f"{SYSTEM_PROMPT.format(user_name=ctx.author.name)}\n\n(AVISO: Você está respondendo via Discord)"},
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        try:
-            async with ctx.typing():
-                ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
-                final_response, _ = await process_multi_step_task(messages, ollama_model, is_discord=True, ctx=ctx)
-                
-                console.print(f"[bold magenta][DISCORD][/bold magenta] Ollie respondeu a {ctx.author.name}")
-                
-                if final_response:
-                    if len(final_response) > 2000:
-                        for i in range(0, len(final_response), 2000):
-                            await ctx.send(final_response[i:i+2000])
-                    else:
-                        await ctx.send(final_response)
-                else:
-                    await ctx.send("✅ Tarefa concluída.")
-        except Exception as e:
-            console.print(f"[bold red][DISCORD ERROR] Erro ao processar pedido de {ctx.author.name}: {e}[/bold red]")
-            await ctx.send(f"❌ Erro ao processar pedido: {e}")
-
-    @bot.event
-    async def on_message(message):
-        # Ignora mensagens do próprio bot
-        if message.author == bot.user:
-            return
-
-        # Log de debug para ver o que o bot está recebendo
-        console.print(f"[dim magenta][DISCORD DEBUG][/dim magenta] Mensagem vista em #[bold]{message.channel}[/bold] de [bold]{message.author}[/bold]: {message.content}")
-
-        # Se for Mensagem Direta (DM) e não for um comando (!), processa como prompt automático
-        if message.guild is None and not message.content.startswith("!"):
-            console.print(f"[bold magenta][DISCORD][/bold magenta] Processando DM de [bold]{message.author}[/bold]")
-            await handle_discord_prompt(message.channel, message.content)
-            return
-
-        # Processa os comandos (importante para o prefixo !cmd funcionar em canais)
-        await bot.process_commands(message)
-
-    @bot.event
-    async def on_command_error(ctx, error):
-        # Loga erros de comando
-        console.print(f"[bold red][DISCORD ERROR][/bold red] Erro no comando !{ctx.command}: {error}")
-        if isinstance(error, commands.CommandNotFound):
-            return # Ignora comandos não encontrados silenciosamente
-        await ctx.send(f"❌ Erro: {error}")
-
-    @bot.command(name="cmd")
-    async def cmd(ctx, *, prompt):
-        """Comando para enviar prompt para o Ollie via Discord."""
-        await handle_discord_prompt(ctx, prompt)
-
-    try:
-        await bot.start(settings["discord_token"])
-    except Exception as e:
-        console.print(f"[red]Erro ao iniciar bot Discord: {e}[/red]")
 
 async def speak(text):
     """Envia o texto para murf.ai e reproduz o áudio resultante."""
@@ -360,6 +293,63 @@ def extract_summary(response):
     text = re.sub(r"```(?:bash|powershell|ps1|sh)?\n.*?\n```", "", response, flags=re.DOTALL | re.IGNORECASE).strip()
     return text
 
+
+def get_ollama_message_content(response):
+    """Retorna o conteúdo do campo message.content em uma resposta Ollama."""
+    if isinstance(response, dict):
+        message = response.get('message', {})
+    elif hasattr(response, 'message'):
+        message = response.message
+    else:
+        message = response
+
+    if isinstance(message, dict):
+        return message.get('content', '') or ''
+    elif hasattr(message, 'content'):
+        return getattr(message, 'content') or ''
+    return ''
+
+
+def normalize_ollama_models(models_response):
+    """Normaliza a lista de modelos retornada pelo Ollama."""
+    if isinstance(models_response, dict) and 'models' in models_response:
+        models_list = models_response['models']
+    elif hasattr(models_response, 'models'):
+        models_list = models_response.models
+    elif isinstance(models_response, (list, tuple)):
+        models_list = list(models_response)
+    elif hasattr(models_response, '__iter__'):
+        models_list = list(models_response)
+    else:
+        models_list = []
+
+    model_names = []
+    for m in models_list:
+        if isinstance(m, dict):
+            model_names.append(m.get('name') or m.get('model') or m.get('id') or str(m))
+        elif hasattr(m, 'name'):
+            model_names.append(m.name)
+        elif hasattr(m, 'model'):
+            model_names.append(m.model)
+        else:
+            model_names.append(str(m))
+
+    return [name for name in model_names if name]
+
+
+def get_ollama_connection_help():
+    """Retorna uma mensagem de ajuda quando a conexão com Ollama falha."""
+    help_text = [
+        "[bold red]Erro:[/bold red] Não foi possível conectar ao Ollama.",
+        "Certifique-se de que o Ollama esteja instalado e em execução.",
+        "Inicie o servidor local com: [bold green]ollama serve[/bold green]",
+        "Ou, se estiver usando outro host, defina a variável de ambiente OLLAMA_HOST.",
+    ]
+    if shutil.which('ollama') is None:
+        help_text.append("O comando 'ollama' não foi encontrado no PATH.")
+    return "\n".join(help_text)
+
+
 def execute_command(command):
     """Executa o comando no terminal e retorna a saída, lidando com sudo se necessário."""
     sudo_password = settings.get("sudo_password", "")
@@ -439,7 +429,7 @@ async def handle_update_decision(update_info):
     try:
         with console.status("[bold magenta]Update Agent analisando mudanças...[/bold magenta]"):
             response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=[{'role': 'user', 'content': update_agent_prompt}])
-            content = response['message']['content']
+            content = get_ollama_message_content(response)
             
             console.print(Panel(content, title="Update Agent - Recomendação", border_style="magenta"))
             
@@ -458,7 +448,7 @@ async def handle_update_decision(update_info):
 # Configurações do Ollama
 DEFAULT_MODEL = "llama3"
 
-async def process_multi_step_task(messages, ollama_model, is_discord=False, ctx=None):
+async def process_multi_step_task(messages, ollama_model):
     """Processa uma tarefa que pode envolver múltiplas etapas de execução de comandos."""
     step_count = 0
     max_steps = 10
@@ -468,56 +458,51 @@ async def process_multi_step_task(messages, ollama_model, is_discord=False, ctx=
         full_response = ""
         show_thoughts = settings.get("show_thoughts", False)
         status_text = f"{AGENT_NAME} ({ollama_model}) pensando..."
-        
-        if is_discord:
-            async with ctx.typing():
-                console.print(f"[bold magenta][DISCORD][/bold magenta] {status_text}")
-                response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages)
-                full_response = response['message']['content']
-                # Log da resposta (primeiros 100 caracteres)
-                preview = full_response[:100].replace("\n", " ")
-                console.print(f"[bold magenta][DISCORD][/bold magenta] Ollie respondeu: [dim cyan]{preview}...[/dim cyan]")
-        else:
+
+        try:
             if show_thoughts:
                 with Live(Text(status_text, style="bold yellow"), refresh_per_second=10) as live:
                     response_gen = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages, stream=True)
                     for chunk in response_gen:
-                        content = chunk['message']['content']
+                        content = get_ollama_message_content(chunk)
                         full_response += content
                         live.update(Text(f"Ollama respondendo: {full_response[-100:]}", style="italic cyan"))
             else:
                 with console.status(f"[bold yellow]{status_text}[/bold yellow]"):
                     response = await asyncio.to_thread(ollama.chat, model=ollama_model, messages=messages)
-                    full_response = response['message']['content']
-        
+                    full_response = get_ollama_message_content(response)
+        except ConnectionError:
+            console.print(Panel(get_ollama_connection_help(), title="Ollama indisponível", border_style="red"))
+            return "", messages
+
         llm_response = full_response
         messages.append({'role': 'assistant', 'content': llm_response})
-        
+
         # Processa configurações embutidas no texto
         if "# CONFIG: SHOW_THOUGHTS=True" in llm_response:
             settings["show_thoughts"] = True
             save_settings(settings)
-            if not is_discord: console.print("[bold magenta]Modo de visualização de pensamentos ativado.[/bold magenta]")
+            console.print("[bold magenta]Modo de visualização de pensamentos ativado.[/bold magenta]")
         elif "# CONFIG: SHOW_THOUGHTS=False" in llm_response:
             settings["show_thoughts"] = False
             save_settings(settings)
-            if not is_discord: console.print("[bold magenta]Modo de visualização de pensamentos desativado.[/bold magenta]")
-        
+            console.print("[bold magenta]Modo de visualização de pensamentos desativado.[/bold magenta]")
+
         if "# CONFIG: TTS_ENABLED=True" in llm_response:
             settings["tts_enabled"] = True
             save_settings(settings)
-            if not is_discord: console.print("[bold magenta]Saída de voz (TTS) ativada.[/bold magenta]")
+            console.print("[bold magenta]Saída de voz (TTS) ativada.[/bold magenta]")
         elif "# CONFIG: TTS_ENABLED=False" in llm_response:
             settings["tts_enabled"] = False
             save_settings(settings)
-            if not is_discord: console.print("[bold magenta]Saída de voz (TTS) desativada.[/bold magenta]")
-        
+            console.print("[bold magenta]Saída de voz (TTS) desativada.[/bold magenta]")
+
         user_name_match = re.search(r"# CONFIG: USER_NAME=(.*)", llm_response)
         if user_name_match:
             new_name = user_name_match.group(1).strip()
             settings["user_name"] = new_name
             save_settings(settings)
-            if not is_discord: console.print(f"[bold magenta]Nome do usuário alterado para: {new_name}[/bold magenta]")
+            console.print(f"[bold magenta]Nome do usuário alterado para: {new_name}[/bold magenta]")
 
         command = extract_bash_command(llm_response)
         summary = extract_summary(llm_response)
@@ -525,50 +510,31 @@ async def process_multi_step_task(messages, ollama_model, is_discord=False, ctx=
         if command:
             step_count += 1
             if summary:
-                if is_discord:
-                    console.print(f"[bold magenta][DISCORD][/bold magenta] Etapa {step_count}: {summary}")
-                    await ctx.send(f"⏳ **Etapa {step_count}:** {summary}")
-                else:
-                    console.print(f"[italic yellow]→ {summary}[/italic yellow]")
-                    await speak(summary)
-            
-            if is_discord:
-                console.print(f"[bold magenta][DISCORD][/bold magenta] Executando: `{command}`")
-            else:
-                console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
-            
+                console.print(f"[italic yellow]→ {summary}[/italic yellow]")
+                await speak(summary)
+
+            console.print(f"[bold cyan]Executando (Etapa {step_count}):[/bold cyan] `{command}`")
             stdout, stderr, code = execute_command(command)
-            
-            # Log da saída do comando no terminal para acompanhamento
-            if is_discord:
-                output_preview = stdout[:150].replace("\n", " ").strip()
-                console.print(f"[bold magenta][DISCORD][/bold magenta] Saída: [dim]{output_preview}...[/dim]")
-            
+
             result_msg = f"RESULTADO DA ETAPA {step_count}:\nSTDOUT: {stdout}\nSTDERR: {stderr}\nEXIT_CODE: {code}"
-            
             if len(result_msg) > 2000:
                 result_msg = result_msg[:1000] + "\n... (saída truncada por ser muito longa) ...\n" + result_msg[-1000:]
-            
+
             messages.append({'role': 'user', 'content': result_msg})
             continue
         else:
             final_response = llm_response
-            if not is_discord:
-                console.print(Panel(Markdown(llm_response), border_style="green", title="Tarefa Concluída"))
-                await speak(llm_response)
+            console.print(Panel(Markdown(llm_response), border_style="green", title="Tarefa Concluída"))
+            await speak(llm_response)
             break
-            
-    if step_count >= max_steps and not is_discord:
+
+    if step_count >= max_steps:
         console.print("[bold red]Aviso:[/bold red] Limite de etapas atingido.")
-    
+
     return final_response, messages
 
 async def chat():
     global memory
-    # Inicia o bot do Discord se estiver habilitado e tiver token
-    if settings.get("discord_enabled") and settings.get("discord_token"):
-        asyncio.create_task(run_discord_bot())
-
     # Verifica atualizações ao iniciar e lida com a decisão do Agente
     update_info = check_for_updates()
     if update_info:
@@ -580,20 +546,7 @@ async def chat():
     # Verifica se o Ollama está acessível e se o modelo existe
     try:
         models_response = ollama.list()
-        models_list = []
-        if isinstance(models_response, dict) and 'models' in models_response:
-            models_list = models_response['models']
-        elif hasattr(models_response, 'models'):
-            models_list = models_response.models
-        
-        model_names = []
-        for m in models_list:
-            if isinstance(m, dict) and 'name' in m:
-                model_names.append(m['name'])
-            elif hasattr(m, 'model'): 
-                model_names.append(m.model)
-            elif hasattr(m, 'name'):
-                model_names.append(m.name)
+        model_names = normalize_ollama_models(models_response)
 
         if ollama_model not in model_names and (ollama_model + ":latest") not in model_names:
             if model_names:
@@ -609,6 +562,9 @@ async def chat():
             else:
                 console.print(Panel(f"[bold red]Aviso:[/bold red] Nenhum modelo foi encontrado no seu Ollama.\n\nPor favor, baixe um modelo primeiro no terminal com:\n[bold green]ollama pull llama3[/bold green] (ou o modelo de sua preferência)", title="Nenhum Modelo Encontrado", border_style="red"))
                 return
+    except ConnectionError:
+        console.print(Panel(get_ollama_connection_help(), title="Erro Crítico", border_style="red"))
+        return
     except Exception as e:
         console.print(Panel(f"[bold red]Erro de conexão com o Ollama:[/bold red]\n{e}\n\nCertifique-se de que o Ollama está rodando.", title="Erro Crítico", border_style="red"))
         return
@@ -636,20 +592,7 @@ async def chat():
                 new_model = user_input.split(" ")[1].strip()
                 try:
                     models_response = ollama.list()
-                    models_list = []
-                    if isinstance(models_response, dict) and 'models' in models_response:
-                        models_list = models_response['models']
-                    elif hasattr(models_response, 'models'):
-                        models_list = models_response.models
-                    
-                    model_names = []
-                    for m in models_list:
-                        if isinstance(m, dict) and 'name' in m:
-                            model_names.append(m['name'])
-                        elif hasattr(m, 'model'):
-                            model_names.append(m.model)
-                        elif hasattr(m, 'name'):
-                            model_names.append(m.name)
+                    model_names = normalize_ollama_models(models_response)
                     
                     if new_model not in model_names and (new_model + ":latest") not in model_names:
                         console.print(f"[bold red]Erro:[/bold red] O modelo '{new_model}' não está baixado.\nBaixe-o primeiro no terminal com: [bold green]ollama pull {new_model}[/bold green]")
@@ -659,6 +602,9 @@ async def chat():
                     settings["ollama_model"] = ollama_model
                     save_settings(settings)
                     console.print(f"[bold green]Modelo alterado para {ollama_model} e salvo![/bold green]")
+                    continue
+                except ConnectionError:
+                    console.print(get_ollama_connection_help())
                     continue
                 except Exception as e:
                     console.print(f"[bold red]Erro ao verificar modelo {new_model}: {e}[/bold red]")
@@ -723,7 +669,7 @@ async def chat():
             
             # Chama o processador de tarefas multi-etapa
             ollama_model = settings.get("ollama_model", DEFAULT_MODEL)
-            await process_multi_step_task(messages, ollama_model, is_discord=False)
+            await process_multi_step_task(messages, ollama_model)
 
         except KeyboardInterrupt:
             console.print("\n[bold yellow]Interrompido pelo usuário. Saindo...[/bold yellow]")
@@ -743,9 +689,7 @@ if __name__ == "__main__":
                 console.print("1. Nome do Usuário")
                 console.print("2. Modelo do Ollama")
                 console.print("3. Chave API Murf.ai")
-                console.print("4. Token do Bot Discord")
-                console.print("5. Habilitar/Desabilitar Discord")
-                console.print("6. Senha Sudo (Linux)")
+                console.print("4. Senha Sudo (Linux)")
                 console.print("0. Sair e Salvar")
                 
                 opcao = console.input("\n[bold yellow]Opção: [/bold yellow]").strip()
@@ -757,13 +701,6 @@ if __name__ == "__main__":
                 elif opcao == "3":
                     settings["murf_api_key"] = console.input(f"Nova chave Murf.ai (atual: {settings['murf_api_key'][:10]}...): ").strip() or settings["murf_api_key"]
                 elif opcao == "4":
-                    settings["discord_token"] = console.input(f"Novo Token Discord (atual: {settings['discord_token'][:10]}...): ").strip() or settings["discord_token"]
-                elif opcao == "5":
-                    estado = "habilitado" if settings["discord_enabled"] else "desabilitado"
-                    confirm = console.input(f"Discord está {estado}. Deseja trocar? (s/n): ").lower().strip()
-                    if confirm == 's':
-                        settings["discord_enabled"] = not settings["discord_enabled"]
-                elif opcao == "6":
                     if IS_WINDOWS:
                         console.print("[red]Sudo não é usado no Windows.[/red]")
                     else:
@@ -772,115 +709,8 @@ if __name__ == "__main__":
                     save_settings(settings)
                     console.print("[green]Configurações salvas![/green]")
                     sys.exit(0)
-                
+
                 save_settings(settings)
-
-        # Iniciar bot em segundo plano
-        if len(sys.argv) > 1 and sys.argv[1] == "start":
-            # Verifica se já existe algo rodando ANTES de tentar iniciar outro
-            if os.path.exists(LOCK_FILE):
-                pid_active = False
-                try:
-                    with open(LOCK_FILE, "r") as f:
-                        pid = int(f.read().strip())
-                    if is_process_running(pid):
-                        pid_active = True
-                        console.print(f"[bold red]Erro:[/bold red] O {AGENT_NAME} já está rodando em segundo plano (PID: {pid}).")
-                        console.print("[yellow]Use 'agent-ollama stop' para encerrar antes de iniciar novamente.[/yellow]")
-                except (ValueError, IOError):
-                    pass
-                
-                if pid_active:
-                    sys.exit(1)
-
-            if not settings.get("discord_token") or not settings.get("discord_enabled"):
-                console.print("[bold red]Erro:[/bold red] Discord não está configurado ou habilitado. Use 'agent-ollama config' primeiro.")
-                sys.exit(1)
-            
-            console.print(f"[bold green]Iniciando {AGENT_NAME} em segundo plano...[/bold green]")
-            
-            script_path = os.path.abspath(__file__)
-            python_exe = sys.executable
-            
-            if IS_WINDOWS:
-                # No Windows, usamos pythonw para não abrir janela de terminal
-                # Se não houver pythonw, usamos python normal com flags de criação de processo
-                pythonw_exe = python_exe.replace("python.exe", "pythonw.exe")
-                if not os.path.exists(pythonw_exe):
-                    pythonw_exe = python_exe
-                
-                # Redirecionamos a saída para o LOG_FILE no Windows também
-                # (Isso é um pouco mais complexo no Windows sem abrir janela, mas possível via shell redirection)
-                subprocess.Popen(
-                    f'"{pythonw_exe}" "{script_path}" run-bot >> "{LOG_FILE}" 2>&1',
-                    shell=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-                    close_fds=True
-                )
-            else:
-                # No Linux, usamos nohup e redirecionamos saída
-                with open(LOG_FILE, "a") as f:
-                    subprocess.Popen(
-                        [python_exe, script_path, "run-bot"],
-                        stdout=f,
-                        stderr=f,
-                        preexec_fn=os.setpgrp
-                    )
-            
-            console.print("[bold cyan]Ollie agora está rodando em segundo plano. Você pode fechar este terminal.[/bold cyan]")
-            sys.exit(0)
-
-        # Modo apenas bot (usado pelo comando 'start')
-        if len(sys.argv) > 1 and sys.argv[1] == "run-bot":
-            check_instance_lock()
-            async def run_only_bot():
-                await run_discord_bot()
-                while True: # Mantém o processo vivo
-                    await asyncio.sleep(3600)
-            asyncio.run(run_only_bot())
-            sys.exit(0)
-        
-        # Comando para acompanhar os logs em tempo real
-        if len(sys.argv) > 1 and sys.argv[1] == "log":
-            if not os.path.exists(LOG_FILE):
-                console.print(f"[bold red]Erro:[/bold red] Arquivo de log não encontrado em {LOG_FILE}")
-                sys.exit(1)
-            
-            console.print(f"[bold cyan]Acompanhando logs de {AGENT_NAME} (Ctrl+C para sair):[/bold cyan]\n")
-            
-            try:
-                # No Windows e Linux, podemos ler o arquivo continuamente
-                with open(LOG_FILE, "r") as f:
-                    # Vai para o final do arquivo primeiro
-                    f.seek(0, os.SEEK_END)
-                    while True:
-                        line = f.readline()
-                        if not line:
-                            time.sleep(0.1)
-                            continue
-                        print(line, end="")
-            except KeyboardInterrupt:
-                console.print("\n[bold yellow]Saindo do log...[/bold yellow]")
-                sys.exit(0)
-
-        # Comando para encerrar o bot em segundo plano
-        if len(sys.argv) > 1 and sys.argv[1] == "stop":
-            console.print(f"[bold yellow]Encerrando instâncias do {AGENT_NAME}...[/bold yellow]")
-            if IS_WINDOWS:
-                # No Windows, usamos taskkill para matar processos pythonw que estão rodando o script
-                subprocess.run(["taskkill", "/F", "/IM", "pythonw.exe", "/T"], capture_output=True)
-                # Também tentamos matar pelo nome do script para garantir
-                subprocess.run(["powershell", "-Command", f"Get-Process | Where-Object {{ $_.CommandLine -like '*{AGENT_NAME}*' }} | Stop-Process -Force"], capture_output=True)
-            else:
-                # No Linux, usamos pkill
-                subprocess.run(["pkill", "-f", "agent-ollama.py"])
-            
-            # Remove o lock file se existir (já que estamos forçando a parada)
-            if os.path.exists(LOCK_FILE):
-                os.remove(LOCK_FILE)
-
-            console.print("[bold green]Instâncias encerradas![/bold green]")
-            sys.exit(0)
 
         # Se chegou aqui, é o modo interativo normal
         check_instance_lock()
