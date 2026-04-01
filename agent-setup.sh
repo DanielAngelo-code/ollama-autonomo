@@ -49,6 +49,17 @@ cd "$INSTALL_DIR"
 EOF
 chmod +x "$WRAPPER_PATH"
 
+SERVER_WRAPPER_PATH="$USER_BIN/agent-ollama-server"
+cat > "$SERVER_WRAPPER_PATH" <<EOF
+#!/bin/bash
+cd "$INSTALL_DIR/pc_app"
+"$VENV_PYTHON" "$INSTALL_DIR/pc_app/server.py" "\$@"
+EOF
+chmod +x "$SERVER_WRAPPER_PATH"
+
+ALIAS_WRAPPER_PATH="$USER_BIN/ollama-autonomos"
+ln -sf "$SERVER_WRAPPER_PATH" "$ALIAS_WRAPPER_PATH"
+
 if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
     SHELL_RC="$HOME/.bashrc"
     if [ -n "$ZSH_VERSION" ] && [ -f "$HOME/.zshrc" ]; then

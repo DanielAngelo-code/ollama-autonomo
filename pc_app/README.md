@@ -28,6 +28,18 @@ cd pc_app
 python3 server.py --host 0.0.0.0 --port 5000
 ```
 
+Se você já rodou o setup do projeto, também pode iniciar o servidor de qualquer diretório com o comando global:
+
+```bash
+agent-ollama-server --host 0.0.0.0 --port 5000
+```
+
+Ou use o alias:
+
+```bash
+ollama-autonomos --host 0.0.0.0 --port 5000
+```
+
 4. Abra no navegador do seu PC Windows usando o IP do servidor:
 
 ```
