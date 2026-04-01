@@ -70,11 +70,21 @@ agent-ollama config
 
 ### 🖥️ App PC com Interface
 O projeto também inclui um app local com servidor web em `pc_app/server.py`.
-Basta rodar:
-```powershell
-python pc_app/server.py
+Basta rodar no servidor Ubuntu ou no dispositivo onde o Ollama está instalado:
+```bash
+cd pc_app
+python3 server.py --host 0.0.0.0 --port 5000
 ```
-E abrir `http://127.0.0.1:5000` no navegador para enviar prompts, ver respostas de texto e ouvir áudio.
+
+Então abra no navegador do seu Windows PC usando o IP do servidor:
+```text
+http://<IP-do-servidor>:5000
+```
+
+Se preferir, também é possível usar variáveis de ambiente:
+```bash
+APP_HOST=0.0.0.0 APP_PORT=5000 python3 server.py
+```
 
 ---
 
