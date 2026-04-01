@@ -38,7 +38,6 @@ PLATFORM = platform.system()
 IS_WINDOWS = PLATFORM == "Windows"
 if not IS_WINDOWS and not os.getenv("DISPLAY"):
     os.environ["SDL_VIDEODRIVER"] = "dummy"
-    os.environ["SDL_AUDIODRIVER"] = "dummy"
 
 try:
     import ollama
@@ -263,14 +262,12 @@ def init_tts_engine(settings=None):
         api_key = settings.get("tts_api_key")
     api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
 
-    if engine_type == "elevenlabs" or api_key:
+    if engine_type == "elevenlabs":
         try:
-            tts = ElevenLabsTTS(api_key=api_key)
-            return tts
+            return ElevenLabsTTS(api_key=api_key)
         except Exception as e:
             print(f"Aviso: ElevenLabs TTS não pôde ser inicializado: {e}")
-            if engine_type == "elevenlabs":
-                return None
+            return None
 
     try:
         tts = LocalTTS()
@@ -761,7 +758,7 @@ async def process_multi_step_task(messages, ollama_model):
             new_voice = tts_voice_match.group(1).strip()
             settings["tts_voice"] = new_voice
             save_settings(settings)
-            console.print(f"[bold magenta]Voz ElevenLabs alterada para: {new_voice}[/bold magenta]")
+            console.print(f"[bold magenta]Voz alterada para: {new_voice}[/bold magenta]")
 
         api_key_match = re.search(r"# CONFIG: ELEVENLABS_API_KEY=(.*)", llm_response)
         if api_key_match:
@@ -921,6 +918,11 @@ async def chat():
                 new_voice = user_input.split(" ", 1)[1].strip()
                 settings["tts_voice"] = new_voice
                 save_settings(settings)
+                if hasattr(tts_engine, 'set_voice'):
+                    try:
+                        tts_engine.set_voice(new_voice)
+                    except Exception:
+                        pass
                 console.print(f"[bold green]Voz alterada para {new_voice} e salva![/bold green]")
                 continue
 
