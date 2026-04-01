@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Ollama - PC App</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+    <header>
+        <h1>Agent Ollama - PC App</h1>
+        <p>Servidor local para enviar prompts ao Ollama, ver a resposta em texto e ouvir o áudio.</p>
+    </header>
+
+    <main>
+        <section class="panel">
+            <h2>Envie uma instrução</h2>
+            <textarea id="prompt" placeholder="Digite sua instrução para o bot..."></textarea>
+            <div class="controls">
+                <button id="sendButton">Enviar</button>
+                <button id="refreshModels">Atualizar Modelos</button>
+            </div>
+            <div id="responseSection" class="response hidden">
+                <h3>Resposta do LLM</h3>
+                <pre id="responseText"></pre>
+                <audio id="audioPlayer" controls class="hidden"></audio>
+                <div id="responseError" class="error"></div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Configurações do Bot</h2>
+            <div class="form-grid">
+                <label>Nome do usuário</label>
+                <input id="userName" type="text" />
+                <label>Modelo Ollama</label>
+                <input id="modelName" type="text" />
+                <label>Habilitar TTS</label>
+                <input id="ttsEnabled" type="checkbox" />
+                <label>Motor TTS</label>
+                <select id="ttsEngine">
+                    <option value="local">Local (pyttsx3)</option>
+                    <option value="elevenlabs">ElevenLabs</option>
+                </select>
+                <label>Voz TTS</label>
+                <input id="ttsVoice" type="text" />
+                <label>Chave ElevenLabs</label>
+                <input id="ttsApiKey" type="password" />
+                <label>Mostrar pensamentos</label>
+                <input id="showThoughts" type="checkbox" />
+            </div>
+            <div class="controls">
+                <button id="saveSettings">Salvar Configurações</button>
+                <button id="loadSettings">Recarregar Configurações</button>
+            </div>
+            <div id="settingsStatus" class="status"></div>
+        </section>
+
+        <section class="panel">
+            <h2>Modelos e Vozes</h2>
+            <div class="info-block">
+                <button id="fetchModels">Listar Modelos Ollama</button>
+                <ul id="modelList"></ul>
+            </div>
+            <div class="info-block">
+                <button id="fetchVoices">Listar Vozes TTS</button>
+                <ul id="voiceList"></ul>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>Abra o navegador em <strong>http://127.0.0.1:5000</strong> após iniciar <code>python pc_app/server.py</code>.</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

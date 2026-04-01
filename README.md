@@ -68,6 +68,14 @@ Você pode configurar a voz ElevenLabs local e outras preferências usando o com
 agent-ollama config
 ```
 
+### 🖥️ App PC com Interface
+O projeto também inclui um app local com servidor web em `pc_app/server.py`.
+Basta rodar:
+```powershell
+python pc_app/server.py
+```
+E abrir `http://127.0.0.1:5000` no navegador para enviar prompts, ver respostas de texto e ouvir áudio.
+
 ---
 
 ## 📖 Como Usar
