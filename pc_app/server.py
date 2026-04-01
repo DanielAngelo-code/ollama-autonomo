@@ -1,4 +1,3 @@
-import argparse
 import os
 import json
 import re
@@ -305,14 +304,5 @@ def audio_files(filename):
     return send_from_directory(AUDIO_DIR, filename)
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Agent Ollama PC App server")
-    parser.add_argument("--host", default=os.getenv("APP_HOST", "127.0.0.1"), help="Host para bind do servidor (use 0.0.0.0 para aceitar conexões externas)")
-    parser.add_argument("--port", type=int, default=int(os.getenv("APP_PORT", "5000")), help="Porta do servidor")
-    parser.add_argument("--debug", action="store_true", default=os.getenv("APP_DEBUG", "false").lower() in ["1", "true", "yes"], help="Ativa modo debug do Flask")
-    return parser.parse_args()
-
-
 if __name__ == "__main__":
-    args = parse_args()
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    app.run(host="127.0.0.1", port=5000, debug=False)

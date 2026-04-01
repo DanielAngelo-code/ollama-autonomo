@@ -21,23 +21,16 @@ python -m pip install -r requirements.txt
 
 2. Certifique-se de que o Ollama esteja instalado e rodando localmente.
 
-3. Execute o servidor localmente no Ubuntu ou no servidor de destino:
+3. Execute o servidor:
 
-```bash
-cd pc_app
-python3 server.py --host 0.0.0.0 --port 5000
+```powershell
+python pc_app/server.py
 ```
 
-4. Abra no navegador do seu Windows PC usando o IP do servidor Ubuntu:
+4. Abra no navegador:
 
 ```
-http://<IP-do-servidor>:5000
-```
-
-Se preferir, também é possível usar variáveis de ambiente:
-
-```bash
-APP_HOST=0.0.0.0 APP_PORT=5000 python3 server.py
+http://127.0.0.1:5000
 ```
 
 ## Configuração

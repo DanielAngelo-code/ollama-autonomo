@@ -68,25 +68,14 @@ Você pode configurar a voz ElevenLabs local e outras preferências usando o com
 agent-ollama config
 ```
 
-<<<<<<< Updated upstream
-=======
 ### 🖥️ App PC com Interface
 O projeto também inclui um app local com servidor web em `pc_app/server.py`.
-Basta rodar no Ubuntu ou no servidor onde o Ollama está disponível:
-```bash
-cd pc_app
-python3 server.py --host 0.0.0.0 --port 5000
+Basta rodar:
+```powershell
+python pc_app/server.py
 ```
+E abrir `http://127.0.0.1:5000` no navegador para enviar prompts, ver respostas de texto e ouvir áudio.
 
-Depois, abra no navegador do seu Windows PC usando o IP do servidor:
-`http://<IP-do-servidor>:5000`.
-
-Se preferir, use variáveis de ambiente:
-```bash
-APP_HOST=0.0.0.0 APP_PORT=5000 python3 server.py
-```
-
->>>>>>> Stashed changes
 ---
 
 ## 📖 Como Usar
