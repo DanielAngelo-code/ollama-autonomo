@@ -31,6 +31,20 @@ header h1 {
     letter-spacing: -0.03em;
 }
 
+.agent-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.agent-avatar {
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: rgba(10, 15, 25, 0.9);
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.35);
+    flex: 0 0 auto;
+}
+
 header p,
 footer p {
     margin: 0;
@@ -201,6 +215,11 @@ footer {
 }
 
 @media (max-width: 640px) {
+    .agent-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
     main {
         padding: 18px 18px 32px;
     }
