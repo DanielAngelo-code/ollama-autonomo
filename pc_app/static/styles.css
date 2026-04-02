@@ -52,12 +52,24 @@ footer p {
     line-height: 1.6;
 }
 
-main {
+.layout {
     max-width: 1200px;
     margin: 0 auto;
     padding: 24px 30px 40px;
     display: grid;
     gap: 24px;
+    grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+    align-items: start;
+}
+
+.content-column {
+    display: grid;
+    gap: 24px;
+}
+
+.settings-panel {
+    position: sticky;
+    top: 16px;
 }
 
 .panel {
@@ -205,6 +217,14 @@ footer {
 }
 
 @media (max-width: 880px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-panel {
+        position: static;
+    }
+
     .form-grid {
         grid-template-columns: 1fr;
     }
