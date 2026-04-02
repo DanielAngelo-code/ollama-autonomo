@@ -38,13 +38,13 @@ DEFAULT_SETTINGS = {
     "user_name": "Usuário",
     "ollama_model": "llama3",
     "tts_engine": "local",
-    "tts_voice": "alloy",
+    "tts_voice": "Rachel",
     "tts_api_key": "",
     "tts_enabled": True,
     "show_thoughts": False,
 }
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 
 def load_settings():
@@ -72,7 +72,8 @@ class LocalTTS:
             raise RuntimeError("pyttsx3 não está instalado.")
         self.engine = pyttsx3.init()
         self.voice_name = voice_name
-        self.set_voice(voice_name)
+        if voice_name:
+            self.set_voice(voice_name)
 
     def list_voices(self):
         voices = []
@@ -88,7 +89,7 @@ class LocalTTS:
 
     def set_voice(self, voice_name):
         if not voice_name:
-            return
+            return False
         try:
             voices = self.engine.getProperty("voices") or []
             lower_candidate = voice_name.lower()
@@ -98,9 +99,10 @@ class LocalTTS:
                 if lower_candidate in v_name.lower() or lower_candidate in v_id.lower():
                     self.engine.setProperty("voice", voice.id)
                     self.voice_name = voice_name
-                    return
+                    return True
         except Exception:
             pass
+        return False
 
     def generate_audio(self, text, output_path):
         self.engine.save_to_file(text, output_path)
@@ -109,55 +111,56 @@ class LocalTTS:
 
 
 class ElevenLabsTTS:
-    def __init__(self, api_key=None, voice=None):
+    def __init__(self, api_key=None, voice=None, model="eleven_multilingual_v2"):
         if elevenlabs is None:
-            raise RuntimeError("ElevenLabs não está instalado.")
+            raise RuntimeError("Pacote elevenlabs não instalado.")
+        if not api_key:
+            raise RuntimeError("Chave da API ElevenLabs não informada.")
         client_cls = getattr(elevenlabs, "ElevenLabs", None) or getattr(elevenlabs, "Client", None)
         if client_cls is None:
-            raise RuntimeError("Não foi possível localizar o cliente ElevenLabs.")
-        if api_key:
-            self.client = client_cls(api_key=api_key)
-        else:
-            self.client = client_cls()
+            raise RuntimeError("Cliente ElevenLabs indisponível na versão instalada.")
+        self.client = client_cls(api_key=api_key)
         self.voice = voice
+        self.model = model
 
     def list_voices(self):
         voices = []
         try:
-            if hasattr(self.client, "voices"):
-                response = self.client.voices.get_all()
-                raw = getattr(response, "voices", []) or []
-            else:
-                raw = elevenlabs.voices() or []
+            response = self.client.voices.get_all()
+            raw = getattr(response, "voices", []) or []
             for v in raw:
-                voices.append({
-                    "id": v.get("voice_id") or v.get("id") or "",
-                    "name": v.get("name") or "",
-                })
+                voice_id = getattr(v, "voice_id", None) or getattr(v, "id", None) or ""
+                name = getattr(v, "name", None) or ""
+                voices.append({"id": voice_id, "name": name})
         except Exception:
             pass
         return voices
 
-    def find_voice(self, voice_name):
+    def resolve_voice_id(self, voice_name):
+        all_voices = self.list_voices()
+        if not all_voices:
+            raise RuntimeError("Nenhuma voz ElevenLabs disponível para a conta.")
         if not voice_name:
-            return None
-        lower_candidate = voice_name.lower()
-        for item in self.list_voices():
-            if lower_candidate == item["id"].lower() or lower_candidate == item["name"].lower():
+            return all_voices[0]["id"]
+        candidate = voice_name.strip().lower()
+        for item in all_voices:
+            if candidate == item["id"].lower() or candidate == item["name"].lower():
                 return item["id"]
-            if lower_candidate in item["name"].lower():
+        for item in all_voices:
+            if candidate in item["name"].lower():
                 return item["id"]
-        return voice_name
+        return all_voices[0]["id"]
 
-    def generate_audio(self, text, output_path, model="eleven_multilingual_v2"):
-        voice_id = self.find_voice(self.voice)
-        if not voice_id:
-            raise RuntimeError("Voz ElevenLabs não encontrada.")
+    def file_extension(self):
+        return "mp3"
+
+    def generate_audio(self, text, output_path):
+        voice_id = self.resolve_voice_id(self.voice)
         audio_iter = self.client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            output_format="wav",
-            model_id=model,
+            output_format="mp3_44100_128",
+            model_id=self.model,
         )
         audio_data = b"".join(audio_iter)
         with open(output_path, "wb") as f:
@@ -193,9 +196,25 @@ def normalize_models(raw_models):
 
 
 def build_tts(settings):
-    if settings.get("tts_engine") == "elevenlabs" and settings.get("tts_api_key"):
-        return ElevenLabsTTS(api_key=settings.get("tts_api_key"), voice=settings.get("tts_voice"))
-    return LocalTTS(voice_name=settings.get("tts_voice"))
+    if settings.get("tts_engine") == "elevenlabs":
+        api_key = settings.get("tts_api_key")
+        if not api_key:
+            print("Aviso: chave ElevenLabs TTS não configurada.")
+            return None
+        try:
+            return ElevenLabsTTS(api_key=api_key, voice=settings.get("tts_voice"))
+        except Exception as error:
+            print(f"Aviso: ElevenLabs TTS indisponível: {error}")
+            return None
+    try:
+        manager = LocalTTS()
+    except Exception as error:
+        print(f"Aviso: TTS local indisponível: {error}")
+        return None
+    requested_voice = settings.get("tts_voice")
+    if requested_voice and not manager.set_voice(requested_voice):
+        print(f"Aviso: voz local '{requested_voice}' não encontrada; usando padrão.")
+    return manager
 
 
 settings = load_settings()
@@ -227,11 +246,14 @@ def api_settings():
         data = request.get_json(force=True)
         if not isinstance(data, dict):
             return jsonify({"error": "Dados inválidos."}), 400
+        engine = data.get("tts_engine", settings.get("tts_engine"))
+        if engine not in ("local", "elevenlabs"):
+            engine = "local"
         settings.update({
             "user_name": data.get("user_name", settings.get("user_name")),
             "ollama_model": data.get("ollama_model", settings.get("ollama_model")),
             "tts_enabled": bool(data.get("tts_enabled", settings.get("tts_enabled"))),
-            "tts_engine": data.get("tts_engine", settings.get("tts_engine")),
+            "tts_engine": engine,
             "tts_voice": data.get("tts_voice", settings.get("tts_voice")),
             "tts_api_key": data.get("tts_api_key", settings.get("tts_api_key", "")),
             "show_thoughts": bool(data.get("show_thoughts", settings.get("show_thoughts", False))),
@@ -241,7 +263,13 @@ def api_settings():
             tts_manager = build_tts(settings)
         except Exception as error:
             tts_manager = None
-            return jsonify({"error": f"Falha ao recarregar TTS: {error}"}), 500
+            return jsonify({**settings, "tts_warning": f"Falha ao recarregar TTS: {error}"})
+        if settings.get("tts_enabled") and tts_manager is None:
+            if settings.get("tts_engine") == "elevenlabs":
+                warning = "ElevenLabs TTS indisponível/configuração incompleta; mantendo respostas em texto."
+            else:
+                warning = "TTS local indisponível nesta máquina; mantendo respostas em texto."
+            return jsonify({**settings, "tts_warning": warning})
         return jsonify(settings)
     return jsonify(settings)
 
@@ -293,7 +321,10 @@ def api_ask():
     output = {"text": result_text}
     if settings.get("tts_enabled", False) and tts_manager is not None:
         timestamp = int(time.time() * 1000)
-        filename = f"response_{timestamp}.wav"
+        extension = "wav"
+        if hasattr(tts_manager, "file_extension"):
+            extension = tts_manager.file_extension() or "wav"
+        filename = f"response_{timestamp}.{extension}"
         audio_path = os.path.join(AUDIO_DIR, filename)
         try:
             tts_manager.generate_audio(result_text, audio_path)
