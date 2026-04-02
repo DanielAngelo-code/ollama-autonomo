@@ -44,7 +44,7 @@ DEFAULT_SETTINGS = {
     "show_thoughts": False,
 }
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 
 def load_settings():
@@ -156,7 +156,7 @@ class ElevenLabsTTS:
         audio_iter = self.client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            output_format="wav",
+            output_format="wav_44100",
             model_id=model,
         )
         audio_data = b"".join(audio_iter)
