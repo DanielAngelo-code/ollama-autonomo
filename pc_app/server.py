@@ -197,11 +197,7 @@ def normalize_models(raw_models):
 def build_tts(settings):
     if settings.get("tts_engine") == "elevenlabs" and settings.get("tts_api_key"):
         return ElevenLabsTTS(api_key=settings.get("tts_api_key"), voice=settings.get("tts_voice"))
-    try:
-        manager = LocalTTS()
-    except Exception as error:
-        print(f"Aviso: TTS local indisponível: {error}")
-        return None
+    manager = LocalTTS()
     requested_voice = settings.get("tts_voice")
     if requested_voice and not manager.set_voice(requested_voice):
         print(f"Aviso: voz local '{requested_voice}' não encontrada; usando padrão.")
@@ -252,8 +248,6 @@ def api_settings():
         except Exception as error:
             tts_manager = None
             return jsonify({**settings, "tts_warning": f"Falha ao recarregar TTS: {error}"})
-        if settings.get("tts_enabled") and tts_manager is None:
-            return jsonify({**settings, "tts_warning": "TTS local indisponível nesta máquina; mantendo respostas em texto."})
         return jsonify(settings)
     return jsonify(settings)
 
