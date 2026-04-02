@@ -44,7 +44,6 @@ O projeto agora possui um fluxo de inicialização automática. Basta executar o
      ```
 
 O setup cria um ambiente virtual `.venv`, instala as dependências dentro dele e cria os comandos globais `agent-ollama`, `agent-ollama-server`, `ollama-autonomos` e `ollama-autonomo`.
-Durante o setup, também é feita uma validação de sintaxe dos arquivos principais (`pc_app/server.py` e `agent-ollama.py`) antes da inicialização.
 
 ### Usar de qualquer lugar
 Após o setup, basta abrir um novo terminal e rodar:
