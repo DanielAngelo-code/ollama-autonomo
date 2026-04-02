@@ -60,6 +60,9 @@ chmod +x "$SERVER_WRAPPER_PATH"
 ALIAS_WRAPPER_PATH="$USER_BIN/ollama-autonomos"
 ln -sf "$SERVER_WRAPPER_PATH" "$ALIAS_WRAPPER_PATH"
 
+SINGULAR_ALIAS_WRAPPER_PATH="$USER_BIN/ollama-autonomo"
+ln -sf "$SERVER_WRAPPER_PATH" "$SINGULAR_ALIAS_WRAPPER_PATH"
+
 if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
     SHELL_RC="$HOME/.bashrc"
     if [ -n "$ZSH_VERSION" ] && [ -f "$HOME/.zshrc" ]; then

@@ -5,6 +5,8 @@ import re
 import time
 import pathlib
 import socket
+import ipaddress
+import sys
 from flask import Flask, request, jsonify, send_from_directory
 
 try:
@@ -328,6 +330,30 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+def print_command_help():
+    help_text = """
+Comandos disponíveis (Agent Ollama):
+
+- agent-ollama
+  Inicia o app web (servidor Flask) com parâmetros opcionais.
+
+- agent-ollama-server --host 0.0.0.0 --port 5000
+  Inicia o servidor web explicitando host/porta.
+
+- ollama-autonomos --host 0.0.0.0 --port 5000
+  Alias do servidor web.
+
+- ollama-autonomo help
+  Exibe esta ajuda com os comandos principais.
+
+Parâmetros aceitos pelo servidor:
+- --host <IP>    (padrão: APP_HOST ou 0.0.0.0)
+- --port <PORTA> (padrão: APP_PORT ou 5000)
+- --debug        (habilita debug Flask)
+"""
+    print(help_text.strip())
+
+
 def get_local_ips():
     addresses = set()
     try:
@@ -348,6 +374,32 @@ def get_local_ips():
     return sorted(addresses)
 
 
+def classify_ip(ip):
+    try:
+        parsed = ipaddress.ip_address(ip)
+    except ValueError:
+        return "desconhecido"
+    if parsed.is_loopback:
+        return "loopback"
+    if parsed in ipaddress.ip_network("100.64.0.0/10"):
+        return "vpn (tailscale/CGNAT)"
+    if parsed in ipaddress.ip_network("172.17.0.0/16"):
+        return "docker"
+    if parsed.is_private:
+        return "rede local"
+    return "público"
+
+
+@app.route("/api/network")
+def api_network():
+    local_ips = get_local_ips()
+    return jsonify({
+        "listen_host": request.host.split(":")[0] if request.host else "",
+        "client_ip": request.remote_addr or "",
+        "local_ips": [{"ip": ip, "type": classify_ip(ip)} for ip in local_ips],
+    })
+
+
 def print_access_hints(host, port):
     print("\n=== Agent Ollama PC App ===")
     if host in ("0.0.0.0", "::"):
@@ -357,6 +409,11 @@ def print_access_hints(host, port):
         if local_ips:
             print("Acesso pela rede local (use no navegador de outro dispositivo):")
             for ip in local_ips:
+                print(f"- http://{ip}:{port} ({classify_ip(ip)})")
+            print(
+                "Se estiver usando VPN (ex.: Tailscale), prefira o IP 100.x.y.z "
+                "e verifique as ACLs da VPN e firewall da máquina."
+            )
                 print(f"- http://{ip}:{port}")
         else:
             print("Não foi possível detectar IPs de rede local automaticamente.")
@@ -370,6 +427,10 @@ def print_access_hints(host, port):
 
 
 def main(argv=None):
+    raw_args = list(argv) if argv is not None else sys.argv[1:]
+    if raw_args and raw_args[0].strip().lower() in {"help", "ajuda", "comandos", "commands"}:
+        print_command_help()
+        return
     args = parse_args(argv)
     print_access_hints(args.host, args.port)
     app.run(host=args.host, port=args.port, debug=args.debug)

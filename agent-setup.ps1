@@ -59,6 +59,9 @@ $AliasBatPath = Join-Path $GlobalBinPath "ollama-autonomos.bat"
 $AliasBatContent = "@echo off`ncd /d `"$PSScriptRoot\pc_app`"`n`"$VenvPython`" `"$ServerScriptPy`" %*"
 $AliasBatContent | Out-File -FilePath $AliasBatPath -Encoding ASCII -Force
 
+$SingularAliasBatPath = Join-Path $GlobalBinPath "ollama-autonomo.bat"
+$AliasBatContent | Out-File -FilePath $SingularAliasBatPath -Encoding ASCII -Force
+
 # Adiciona a pasta 'bin' ao PATH do usuário PERMANENTEMENTE
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$GlobalBinPath*") {

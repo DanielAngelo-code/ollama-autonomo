@@ -41,6 +41,7 @@ Também estão disponíveis:
 ```bash
 agent-ollama-server --host 0.0.0.0 --port 5000
 ollama-autonomos --host 0.0.0.0 --port 5000
+ollama-autonomo help
 ```
 
 4. Abra no navegador do seu PC Windows usando o IP do servidor:
@@ -54,6 +55,7 @@ Se aparecer "acesso negado", confirme estes pontos:
 - inicie o servidor com `--host 0.0.0.0`;
 - use o IP da máquina que está executando o servidor (não `127.0.0.1` em outro dispositivo);
 - libere a porta `5000` no firewall.
+- em VPN (ex.: Tailscale), use o IP `100.x.x.x` e valide as ACLs/políticas da VPN.
 
 Você também pode usar variáveis de ambiente:
 
