@@ -972,6 +972,12 @@ if __name__ == "__main__":
     try:
         try:
             from pc_app.server import main as run_web_server
+        except (SyntaxError, IndentationError) as e:
+            console.print("[bold red]Erro ao iniciar o app web:[/bold red] falha de sintaxe em `pc_app/server.py`.")
+            console.print(f"Detalhe: linha {getattr(e, 'lineno', '?')}, coluna {getattr(e, 'offset', '?')} -> {e}")
+            console.print("Atualize o projeto e tente novamente:")
+            console.print("  [bold green]git pull[/bold green]")
+            sys.exit(1)
         except ModuleNotFoundError as e:
             console.print(f"[bold red]Erro ao iniciar o app web:[/bold red] módulo não encontrado: {e.name}")
             console.print("Instale as dependências com: [bold green]python -m pip install -r requirements.txt[/bold green]")
