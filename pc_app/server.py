@@ -287,6 +287,7 @@ def api_ask():
         response = ollama.chat(model=settings.get("ollama_model", "llama3"), messages=messages)
         result_text = get_message_content(response)
     except Exception as error:
+        print(f"Erro ao consultar Ollama: {error}", file=sys.stderr)
         return jsonify({"error": f"Erro ao consultar Ollama: {error}"}), 500
 
     output = {"text": result_text}
@@ -301,6 +302,12 @@ def api_ask():
             output["audio_error"] = str(error)
 
     return jsonify(output)
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(error):
+    print(f"Unhandled server exception: {error}", file=sys.stderr)
+    return jsonify({"error": "Erro interno do servidor.", "detail": str(error)}), 500
 
 
 @app.route("/audio/<path:filename>")

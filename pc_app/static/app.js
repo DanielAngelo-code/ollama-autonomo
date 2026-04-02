@@ -82,17 +82,32 @@ async function askPrompt() {
         return;
     }
     showResponse("Aguardando resposta...", null, "");
-    const response = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        showResponse("", null, data.error || "Erro desconhecido ao enviar prompt.");
-        return;
+
+    try {
+        const response = await fetch("/api/ask", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+        });
+
+        const text = await response.text();
+        let data;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (parseError) {
+            throw new Error(`Resposta inválida do servidor: ${text}`);
+        }
+
+        if (!response.ok) {
+            showResponse("", null, data.error || "Erro desconhecido ao enviar prompt.");
+            return;
+        }
+
+        showResponse(data.text || "", data.audio_url || null, data.audio_error || null);
+    } catch (error) {
+        console.error("Falha ao enviar prompt:", error);
+        showResponse("", null, error.message || "Erro ao enviar prompt.");
     }
-    showResponse(data.text || "", data.audio_url || null, data.audio_error || null);
 }
 
 async function updateModels() {
