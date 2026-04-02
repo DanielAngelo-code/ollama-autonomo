@@ -1,6 +1,8 @@
 const promptEl = document.getElementById("prompt");
 const sendButton = document.getElementById("sendButton");
-const refreshModelsButton = document.getElementById("refreshModels");
+const menuButton = document.getElementById("menuButton");
+const closeDrawerButton = document.getElementById("closeDrawer");
+const settingsDrawer = document.getElementById("settingsDrawer");
 const responseSection = document.getElementById("responseSection");
 const chatLog = document.getElementById("chatLog");
 const responseError = document.getElementById("responseError");
@@ -168,14 +170,26 @@ async function updateVoices() {
     }
 }
 
+function toggleDrawer(force = null) {
+    const shouldOpen = force === null ? settingsDrawer.classList.contains("hidden") : force;
+    settingsDrawer.classList.toggle("hidden", !shouldOpen);
+}
+
 sendButton.addEventListener("click", askPrompt);
-refreshModelsButton.addEventListener("click", updateModels);
+menuButton.addEventListener("click", () => toggleDrawer());
+closeDrawerButton.addEventListener("click", () => toggleDrawer(false));
 saveSettingsButton.addEventListener("click", saveSettings);
 loadSettingsButton.addEventListener("click", fetchSettings);
 fetchModelsButton.addEventListener("click", updateModels);
 fetchVoicesButton.addEventListener("click", updateVoices);
+promptEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        askPrompt();
+    }
+});
 
 window.addEventListener("load", async () => {
     await fetchSettings();
-    await updateModels();
+    appendChatMessage("bot", "Olá! Envie uma instrução para começar.");
 });
