@@ -8,12 +8,24 @@
 </head>
 <body>
     <header>
-        <h1>Agent Ollama - PC App</h1>
-        <p>Servidor local para enviar prompts ao Ollama, ver a resposta em texto e ouvir o áudio.</p>
+        <div class="agent-hero">
+            <img
+                src="/static/agent-face.svg"
+                alt="Rosto do agente virtual Ollie"
+                class="agent-avatar"
+                width="96"
+                height="96"
+            />
+            <div>
+                <h1>Agent Ollama - PC App</h1>
+                <p>Servidor local para enviar prompts ao Ollama, ver a resposta em texto e ouvir o áudio.</p>
+            </div>
+        </div>
     </header>
 
-    <main>
-        <section class="panel">
+    <main class="layout">
+        <div class="content-column">
+            <section class="panel">
             <h2>Envie uma instrução</h2>
             <textarea id="prompt" placeholder="Digite sua instrução para o bot..."></textarea>
             <div class="controls">
@@ -21,14 +33,27 @@
                 <button id="refreshModels">Atualizar Modelos</button>
             </div>
             <div id="responseSection" class="response hidden">
-                <h3>Resposta do LLM</h3>
-                <pre id="responseText"></pre>
+                <h3>Conversa</h3>
+                <div id="chatLog" class="chat-log"></div>
                 <audio id="audioPlayer" controls class="hidden"></audio>
                 <div id="responseError" class="error"></div>
             </div>
-        </section>
+            </section>
 
-        <section class="panel">
+            <section class="panel">
+                <h2>Modelos e Vozes</h2>
+                <div class="info-block">
+                    <button id="fetchModels">Listar Modelos Ollama</button>
+                    <ul id="modelList"></ul>
+                </div>
+                <div class="info-block">
+                    <button id="fetchVoices">Listar Vozes TTS</button>
+                    <ul id="voiceList"></ul>
+                </div>
+            </section>
+        </div>
+
+        <aside class="panel settings-panel">
             <h2>Configurações do Bot</h2>
             <div class="form-grid">
                 <label>Nome do usuário</label>
@@ -54,19 +79,7 @@
                 <button id="loadSettings">Recarregar Configurações</button>
             </div>
             <div id="settingsStatus" class="status"></div>
-        </section>
-
-        <section class="panel">
-            <h2>Modelos e Vozes</h2>
-            <div class="info-block">
-                <button id="fetchModels">Listar Modelos Ollama</button>
-                <ul id="modelList"></ul>
-            </div>
-            <div class="info-block">
-                <button id="fetchVoices">Listar Vozes TTS</button>
-                <ul id="voiceList"></ul>
-            </div>
-        </section>
+        </aside>
     </main>
 
     <footer>
