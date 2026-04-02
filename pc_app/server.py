@@ -44,7 +44,7 @@ DEFAULT_SETTINGS = {
     "show_thoughts": False,
 }
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 
 def load_settings():
@@ -72,7 +72,8 @@ class LocalTTS:
             raise RuntimeError("pyttsx3 não está instalado.")
         self.engine = pyttsx3.init()
         self.voice_name = voice_name
-        self.set_voice(voice_name)
+        if voice_name:
+            self.set_voice(voice_name)
 
     def list_voices(self):
         voices = []
@@ -88,7 +89,7 @@ class LocalTTS:
 
     def set_voice(self, voice_name):
         if not voice_name:
-            return
+            return False
         try:
             voices = self.engine.getProperty("voices") or []
             lower_candidate = voice_name.lower()
@@ -98,9 +99,10 @@ class LocalTTS:
                 if lower_candidate in v_name.lower() or lower_candidate in v_id.lower():
                     self.engine.setProperty("voice", voice.id)
                     self.voice_name = voice_name
-                    return
+                    return True
         except Exception:
             pass
+        return False
 
     def generate_audio(self, text, output_path):
         self.engine.save_to_file(text, output_path)
@@ -156,7 +158,7 @@ class ElevenLabsTTS:
         audio_iter = self.client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            output_format="wav",
+            output_format="wav_44100",
             model_id=model,
         )
         audio_data = b"".join(audio_iter)
@@ -195,7 +197,11 @@ def normalize_models(raw_models):
 def build_tts(settings):
     if settings.get("tts_engine") == "elevenlabs" and settings.get("tts_api_key"):
         return ElevenLabsTTS(api_key=settings.get("tts_api_key"), voice=settings.get("tts_voice"))
-    return LocalTTS(voice_name=settings.get("tts_voice"))
+    manager = LocalTTS()
+    requested_voice = settings.get("tts_voice")
+    if requested_voice and not manager.set_voice(requested_voice):
+        print(f"Aviso: voz local '{requested_voice}' não encontrada; usando padrão.")
+    return manager
 
 
 settings = load_settings()
@@ -241,7 +247,7 @@ def api_settings():
             tts_manager = build_tts(settings)
         except Exception as error:
             tts_manager = None
-            return jsonify({"error": f"Falha ao recarregar TTS: {error}"}), 500
+            return jsonify({**settings, "tts_warning": f"Falha ao recarregar TTS: {error}"})
         return jsonify(settings)
     return jsonify(settings)
 
