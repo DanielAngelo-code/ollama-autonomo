@@ -2,7 +2,7 @@ const promptEl = document.getElementById("prompt");
 const sendButton = document.getElementById("sendButton");
 const refreshModelsButton = document.getElementById("refreshModels");
 const responseSection = document.getElementById("responseSection");
-const responseText = document.getElementById("responseText");
+const chatLog = document.getElementById("chatLog");
 const responseError = document.getElementById("responseError");
 const audioPlayer = document.getElementById("audioPlayer");
 const userName = document.getElementById("userName");
@@ -25,9 +25,16 @@ function showStatus(text, isError = false) {
     settingsStatus.className = isError ? "status error" : "status";
 }
 
-function showResponse(text, audioUrl = null, error = null) {
+function appendChatMessage(role, text, type = "") {
+    const item = document.createElement("div");
+    item.className = `chat-message ${role} ${type}`.trim();
+    item.textContent = `${role === "user" ? "usuário" : "bot"}: ${text}`;
+    chatLog.appendChild(item);
+    chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function updateResponseMedia(audioUrl = null, error = null) {
     responseSection.classList.remove("hidden");
-    responseText.textContent = text || "";
     responseError.textContent = error || "";
 
     if (audioUrl) {
@@ -83,10 +90,14 @@ async function saveSettings() {
 async function askPrompt() {
     const prompt = promptEl.value.trim();
     if (!prompt) {
-        showResponse("", null, "Digite um prompt antes de enviar.");
+        updateResponseMedia(null, "Digite um prompt antes de enviar.");
         return;
     }
-    showResponse("Aguardando resposta...", null, "");
+    responseSection.classList.remove("hidden");
+    appendChatMessage("user", prompt);
+    appendChatMessage("bot", "ok!");
+    appendChatMessage("bot", "executando tarefa...");
+    responseError.textContent = "";
 
     try {
         const response = await fetch("/api/ask", {
@@ -104,14 +115,22 @@ async function askPrompt() {
         }
 
         if (!response.ok) {
-            showResponse("", null, data.error || "Erro desconhecido ao enviar prompt.");
+            appendChatMessage("bot", data.error || "Erro desconhecido ao enviar prompt.", "error");
             return;
         }
 
-        showResponse(data.text || "", data.audio_url || null, data.audio_error || null);
+        if (Array.isArray(data.process_log)) {
+            data.process_log.forEach((message) => appendChatMessage("bot", message, "process"));
+        }
+        if (showThoughts.checked && data.thoughts) {
+            appendChatMessage("bot", `pensamentos: ${data.thoughts}`, "thought");
+        }
+        appendChatMessage("bot", data.text || "Sem resposta.");
+        updateResponseMedia(data.audio_url || null, data.audio_error || null);
     } catch (error) {
         console.error("Falha ao enviar prompt:", error);
-        showResponse("", null, error.message || "Erro ao enviar prompt.");
+        appendChatMessage("bot", error.message || "Erro ao enviar prompt.", "error");
+        updateResponseMedia(null, error.message || "Erro ao enviar prompt.");
     }
 }
 

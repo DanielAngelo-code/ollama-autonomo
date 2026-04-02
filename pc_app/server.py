@@ -180,6 +180,15 @@ def get_message_content(response):
     return getattr(message, "content", "") or ""
 
 
+def split_visible_and_thoughts(text):
+    if not text:
+        return "", ""
+    thoughts = re.findall(r"<think>(.*?)</think>", text, flags=re.IGNORECASE | re.DOTALL)
+    visible = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
+    thought_text = "\n\n".join(t.strip() for t in thoughts if t.strip())
+    return visible, thought_text
+
+
 def normalize_models(raw_models):
     models = []
     if isinstance(raw_models, dict) and "models" in raw_models:
@@ -293,14 +302,30 @@ def api_ask():
         {"role": "user", "content": prompt},
     ]
 
+    selected_model = settings.get("ollama_model", "llama3")
+    process_log = [
+        "OK! Vou executar sua tarefa.",
+        f"Executando: ollama.chat(model='{selected_model}')",
+    ]
     try:
-        response = ollama.chat(model=settings.get("ollama_model", "llama3"), messages=messages)
-        result_text = get_message_content(response)
+        response = ollama.chat(model=selected_model, messages=messages)
+        raw_text = get_message_content(response)
     except Exception as error:
         print(f"Erro ao consultar Ollama: {error}", file=sys.stderr)
         return jsonify({"error": f"Erro ao consultar Ollama: {error}"}), 500
 
-    output = {"text": result_text}
+    visible_text, thought_text = split_visible_and_thoughts(raw_text)
+    if not visible_text:
+        visible_text = raw_text or ""
+    process_log.append("Resposta do sistema recebida.")
+
+    output = {
+        "text": visible_text,
+        "process_log": process_log,
+    }
+    if settings.get("show_thoughts") and thought_text:
+        output["thoughts"] = thought_text
+
     if settings.get("tts_enabled", False) and tts_manager is not None:
         timestamp = int(time.time() * 1000)
         extension = "wav"
@@ -309,10 +334,12 @@ def api_ask():
         filename = f"response_{timestamp}.{extension}"
         audio_path = os.path.join(AUDIO_DIR, filename)
         try:
-            tts_manager.generate_audio(result_text, audio_path)
+            tts_manager.generate_audio(visible_text, audio_path)
             output["audio_url"] = f"/audio/{filename}"
+            process_log.append("Áudio gerado com sucesso.")
         except Exception as error:
             output["audio_error"] = str(error)
+            process_log.append(f"Falha no TTS: {error}")
 
     return jsonify(output)
 
