@@ -414,7 +414,6 @@ def print_access_hints(host, port):
                 "Se estiver usando VPN (ex.: Tailscale), prefira o IP 100.x.y.z "
                 "e verifique as ACLs da VPN e firewall da máquina."
             )
-                print(f"- http://{ip}:{port}")
         else:
             print("Não foi possível detectar IPs de rede local automaticamente.")
     else:
