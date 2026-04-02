@@ -34,6 +34,11 @@ function showResponse(text, audioUrl = null, error = null) {
         audioPlayer.src = audioUrl;
         audioPlayer.classList.remove("hidden");
         audioPlayer.load();
+        audioPlayer
+            .play()
+            .catch(() => {
+                responseError.textContent = "Áudio pronto. Clique em play se o navegador bloquear reprodução automática.";
+            });
     } else {
         audioPlayer.classList.add("hidden");
         audioPlayer.src = "";
@@ -69,7 +74,7 @@ async function saveSettings() {
     });
     const data = await response.json();
     if (response.ok) {
-        showStatus("Configurações salvas com sucesso.");
+        showStatus(data.tts_warning || "Configurações salvas com sucesso.", Boolean(data.tts_warning));
     } else {
         showStatus(data.error || "Erro ao salvar configurações.", true);
     }

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Rosto do agente Ollie</title>
+  <desc id="desc">Avatar circular com rosto robótico amigável em tons azul neon.</desc>
+  <defs>
+    <radialGradient id="bg" cx="35%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#42e8ff"/>
+      <stop offset="45%" stop-color="#2f78ff"/>
+      <stop offset="100%" stop-color="#141e38"/>
+    </radialGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d7f5ff"/>
+      <stop offset="100%" stop-color="#91d9ff"/>
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="118" fill="none" stroke="#8af4ff" stroke-opacity=".45" stroke-width="3"/>
+  <rect x="60" y="68" width="136" height="120" rx="34" fill="url(#face)" stroke="#204f9a" stroke-width="6"/>
+  <rect x="78" y="106" width="40" height="22" rx="11" fill="#19346c"/>
+  <rect x="138" y="106" width="40" height="22" rx="11" fill="#19346c"/>
+  <circle cx="98" cy="117" r="6" fill="#51f7ff"/>
+  <circle cx="158" cy="117" r="6" fill="#51f7ff"/>
+  <rect x="94" y="147" width="68" height="14" rx="7" fill="#1b4588"/>
+  <rect x="118" y="44" width="20" height="24" rx="8" fill="#8fe8ff"/>
+  <circle cx="128" cy="37" r="10" fill="#4af5ff"/>
+</svg>
