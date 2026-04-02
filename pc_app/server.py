@@ -4,6 +4,7 @@ import json
 import re
 import time
 import pathlib
+import socket
 from flask import Flask, request, jsonify, send_from_directory
 
 try:
@@ -309,7 +310,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Agent Ollama PC App server")
     parser.add_argument(
         "--host",
-        default=os.getenv("APP_HOST", "127.0.0.1"),
+        default=os.getenv("APP_HOST", "0.0.0.0"),
         help="Host para bind do servidor (use 0.0.0.0 para aceitar conexões externas)",
     )
     parser.add_argument(
@@ -327,8 +328,50 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+def get_local_ips():
+    addresses = set()
+    try:
+        _, _, ipv4_entries = socket.gethostbyname_ex(socket.gethostname())
+        for ip in ipv4_entries:
+            if ip and not ip.startswith("127."):
+                addresses.add(ip)
+    except Exception:
+        pass
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, family=socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127."):
+                addresses.add(ip)
+    except Exception:
+        pass
+    return sorted(addresses)
+
+
+def print_access_hints(host, port):
+    print("\n=== Agent Ollama PC App ===")
+    if host in ("0.0.0.0", "::"):
+        print(f"Servidor ouvindo em todas as interfaces na porta {port}.")
+        print(f"Acesso local: http://127.0.0.1:{port}")
+        local_ips = get_local_ips()
+        if local_ips:
+            print("Acesso pela rede local (use no navegador de outro dispositivo):")
+            for ip in local_ips:
+                print(f"- http://{ip}:{port}")
+        else:
+            print("Não foi possível detectar IPs de rede local automaticamente.")
+    else:
+        print(f"Servidor ouvindo apenas em {host}:{port}.")
+        print(
+            "Se você receber 'acesso negado' em outro dispositivo, "
+            "inicie com --host 0.0.0.0 e libere a porta no firewall."
+        )
+    print("===========================\n")
+
+
 def main(argv=None):
     args = parse_args(argv)
+    print_access_hints(args.host, args.port)
     app.run(host=args.host, port=args.port, debug=args.debug)
 
 

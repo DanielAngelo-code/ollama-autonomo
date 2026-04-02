@@ -49,6 +49,12 @@ ollama-autonomos --host 0.0.0.0 --port 5000
 http://<IP-do-servidor>:5000
 ```
 
+Se aparecer "acesso negado", confirme estes pontos:
+
+- inicie o servidor com `--host 0.0.0.0`;
+- use o IP da máquina que está executando o servidor (não `127.0.0.1` em outro dispositivo);
+- libere a porta `5000` no firewall.
+
 Você também pode usar variáveis de ambiente:
 
 ```bash
