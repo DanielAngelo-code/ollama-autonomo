@@ -130,6 +130,8 @@ http://IP-DA-MAQUINA:5000
 
 Também garanta que a porta `5000` esteja liberada no firewall da máquina do servidor.
 
+Se você usa Tailscale/VPN, prefira o IP `100.x.x.x` da interface da VPN e confirme que as ACLs da VPN permitem conexão entre os dois nós na porta `5000`.
+
 A interface web permite configurar:
 - nome do usuário
 - modelo do Ollama
