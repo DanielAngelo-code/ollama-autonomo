@@ -38,6 +38,14 @@ Write-Host "Instalando dependências no venv..." -ForegroundColor Cyan
 & $VenvPython -m pip install --upgrade pip
 & $VenvPython -m pip install -r requirements.txt
 
+Write-Host "Validando arquivos principais (syntax check)..." -ForegroundColor Cyan
+& $VenvPython -m py_compile (Join-Path $PSScriptRoot "pc_app\server.py") (Join-Path $PSScriptRoot "agent-ollama.py")
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Erro: falha de sintaxe detectada em arquivos do projeto." -ForegroundColor Red
+    Write-Host "Dica: rode 'git pull' e execute o setup novamente." -ForegroundColor Red
+    exit 1
+}
+
 # 3. Cria comando global 'agent-ollama' e servidor em uma pasta dedicada
 Write-Host "Configurando comando global no PATH..." -ForegroundColor Cyan
 $GlobalBinPath = Join-Path $PSScriptRoot "bin"
@@ -58,6 +66,9 @@ $ServerBatContent | Out-File -FilePath $ServerBatPath -Encoding ASCII -Force
 $AliasBatPath = Join-Path $GlobalBinPath "ollama-autonomos.bat"
 $AliasBatContent = "@echo off`ncd /d `"$PSScriptRoot\pc_app`"`n`"$VenvPython`" `"$ServerScriptPy`" %*"
 $AliasBatContent | Out-File -FilePath $AliasBatPath -Encoding ASCII -Force
+
+$SingularAliasBatPath = Join-Path $GlobalBinPath "ollama-autonomo.bat"
+$AliasBatContent | Out-File -FilePath $SingularAliasBatPath -Encoding ASCII -Force
 
 # Adiciona a pasta 'bin' ao PATH do usuário PERMANENTEMENTE
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")

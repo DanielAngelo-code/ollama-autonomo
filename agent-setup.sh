@@ -36,6 +36,13 @@ echo -e "\e[36mInstalando dependências no venv...\e[0m"
 $VENV_PYTHON -m pip install --upgrade pip
 $VENV_PYTHON -m pip install -r requirements.txt
 
+echo -e "\e[36mValidando arquivos principais (syntax check)...\e[0m"
+if ! "$VENV_PYTHON" -m py_compile "$INSTALL_DIR/pc_app/server.py" "$INSTALL_DIR/agent-ollama.py"; then
+    echo -e "\e[31mErro: falha de sintaxe detectada em arquivos do projeto.\e[0m"
+    echo -e "\e[31mDica: rode 'git pull' e execute o setup novamente.\e[0m"
+    exit 1
+fi
+
 # 3. Cria comando global 'agent-ollama' em ~/.local/bin
 USER_BIN="$HOME/.local/bin"
 mkdir -p "$USER_BIN"
@@ -59,6 +66,9 @@ chmod +x "$SERVER_WRAPPER_PATH"
 
 ALIAS_WRAPPER_PATH="$USER_BIN/ollama-autonomos"
 ln -sf "$SERVER_WRAPPER_PATH" "$ALIAS_WRAPPER_PATH"
+
+SINGULAR_ALIAS_WRAPPER_PATH="$USER_BIN/ollama-autonomo"
+ln -sf "$SERVER_WRAPPER_PATH" "$SINGULAR_ALIAS_WRAPPER_PATH"
 
 if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
     SHELL_RC="$HOME/.bashrc"
