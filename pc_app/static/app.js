@@ -35,10 +35,6 @@ function appendChatMessage(role, text, type = "") {
     chatLog.scrollTop = chatLog.scrollHeight;
 }
 
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function updateResponseMedia(audioUrl = null, error = null) {
     responseSection.classList.remove("hidden");
     responseError.textContent = error || "";
@@ -101,8 +97,9 @@ async function askPrompt() {
     }
     responseSection.classList.remove("hidden");
     appendChatMessage("user", prompt);
+    appendChatMessage("bot", "ok!");
+    appendChatMessage("bot", "executando tarefa...");
     responseError.textContent = "";
-    promptEl.value = "";
 
     try {
         const response = await fetch("/api/ask", {
@@ -125,10 +122,7 @@ async function askPrompt() {
         }
 
         if (Array.isArray(data.process_log)) {
-            for (const message of data.process_log) {
-                appendChatMessage("bot", message, "process");
-                await sleep(280);
-            }
+            data.process_log.forEach((message) => appendChatMessage("bot", message, "process"));
         }
         if (showThoughts.checked && data.thoughts) {
             appendChatMessage("bot", `pensamentos: ${data.thoughts}`, "thought");

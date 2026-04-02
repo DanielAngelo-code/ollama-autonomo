@@ -7,32 +7,54 @@
     <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-    <header class="topbar">
-        <button id="menuButton" class="menu-button" aria-label="Abrir configurações">☰</button>
-        <div class="brand">
-            <img src="/static/agent-face.svg" alt="Avatar artístico do bot" class="agent-avatar" width="56" height="56" />
+    <header>
+        <div class="agent-hero">
+            <img
+                src="/static/agent-face.svg"
+                alt="Rosto do agente virtual Ollie"
+                class="agent-avatar"
+                width="96"
+                height="96"
+            />
             <div>
-                <h1>Ollie Chat</h1>
-                <p>Converse com o assistente local em tempo real.</p>
+                <h1>Agent Ollama - PC App</h1>
+                <p>Servidor local para enviar prompts ao Ollama, ver a resposta em texto e ouvir o áudio.</p>
             </div>
         </div>
     </header>
 
-    <main class="chat-shell">
-        <section id="responseSection" class="response">
-            <div id="chatLog" class="chat-log"></div>
-            <audio id="audioPlayer" controls class="hidden"></audio>
-            <div id="responseError" class="error"></div>
-        </section>
-        <footer class="composer">
-            <textarea id="prompt" placeholder="Digite sua instrução..." rows="2"></textarea>
-            <button id="sendButton">Enviar</button>
-        </footer>
-    </main>
+    <main class="layout">
+        <div class="content-column">
+            <section class="panel">
+            <h2>Envie uma instrução</h2>
+            <textarea id="prompt" placeholder="Digite sua instrução para o bot..."></textarea>
+            <div class="controls">
+                <button id="sendButton">Enviar</button>
+                <button id="refreshModels">Atualizar Modelos</button>
+            </div>
+            <div id="responseSection" class="response hidden">
+                <h3>Conversa</h3>
+                <div id="chatLog" class="chat-log"></div>
+                <audio id="audioPlayer" controls class="hidden"></audio>
+                <div id="responseError" class="error"></div>
+            </div>
+            </section>
 
-    <aside id="settingsDrawer" class="settings-drawer hidden">
-        <div class="panel">
-            <h2>Configurações</h2>
+            <section class="panel">
+                <h2>Modelos e Vozes</h2>
+                <div class="info-block">
+                    <button id="fetchModels">Listar Modelos Ollama</button>
+                    <ul id="modelList"></ul>
+                </div>
+                <div class="info-block">
+                    <button id="fetchVoices">Listar Vozes TTS</button>
+                    <ul id="voiceList"></ul>
+                </div>
+            </section>
+        </div>
+
+        <aside class="panel settings-panel">
+            <h2>Configurações do Bot</h2>
             <div class="form-grid">
                 <label>Nome do usuário</label>
                 <input id="userName" type="text" />
@@ -58,14 +80,12 @@
                 <button id="closeDrawer">Fechar</button>
             </div>
             <div id="settingsStatus" class="status"></div>
-            <div class="controls">
-                <button id="fetchModels">Listar Modelos Ollama</button>
-                <button id="fetchVoices">Listar Vozes TTS</button>
-            </div>
-            <ul id="modelList"></ul>
-            <ul id="voiceList"></ul>
-        </div>
-    </aside>
+        </aside>
+    </main>
+
+    <footer>
+        <p>Abra o navegador em <strong>http://127.0.0.1:5000</strong> após iniciar <code>python pc_app/server.py</code>.</p>
+    </footer>
 
     <script src="/static/app.js"></script>
 </body>

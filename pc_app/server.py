@@ -45,15 +45,6 @@ DEFAULT_SETTINGS = {
 }
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
-app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
-
-
-@app.after_request
-def add_no_cache_headers(response):
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
 
 
 def load_settings():
@@ -168,8 +159,8 @@ class ElevenLabsTTS:
         audio_iter = self.client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            output_format="mp3_44100_128",
-            model_id=self.model,
+            output_format="wav_44100",
+            model_id=model,
         )
         audio_data = b"".join(audio_iter)
         with open(output_path, "wb") as f:
@@ -214,21 +205,9 @@ def normalize_models(raw_models):
 
 
 def build_tts(settings):
-    if settings.get("tts_engine") == "elevenlabs":
-        api_key = settings.get("tts_api_key")
-        if not api_key:
-            print("Aviso: chave ElevenLabs TTS não configurada.")
-            return None
-        try:
-            return ElevenLabsTTS(api_key=api_key, voice=settings.get("tts_voice"))
-        except Exception as error:
-            print(f"Aviso: ElevenLabs TTS indisponível: {error}")
-            return None
-    try:
-        manager = LocalTTS()
-    except Exception as error:
-        print(f"Aviso: TTS local indisponível: {error}")
-        return None
+    if settings.get("tts_engine") == "elevenlabs" and settings.get("tts_api_key"):
+        return ElevenLabsTTS(api_key=settings.get("tts_api_key"), voice=settings.get("tts_voice"))
+    manager = LocalTTS()
     requested_voice = settings.get("tts_voice")
     if requested_voice and not manager.set_voice(requested_voice):
         print(f"Aviso: voz local '{requested_voice}' não encontrada; usando padrão.")
@@ -282,12 +261,6 @@ def api_settings():
         except Exception as error:
             tts_manager = None
             return jsonify({**settings, "tts_warning": f"Falha ao recarregar TTS: {error}"})
-        if settings.get("tts_enabled") and tts_manager is None:
-            if settings.get("tts_engine") == "elevenlabs":
-                warning = "ElevenLabs TTS indisponível/configuração incompleta; mantendo respostas em texto."
-            else:
-                warning = "TTS local indisponível nesta máquina; mantendo respostas em texto."
-            return jsonify({**settings, "tts_warning": warning})
         return jsonify(settings)
     return jsonify(settings)
 
@@ -331,7 +304,8 @@ def api_ask():
 
     selected_model = settings.get("ollama_model", "llama3")
     process_log = [
-        f"Iniciando consulta no modelo: {selected_model}",
+        "OK! Vou executar sua tarefa.",
+        f"Executando: ollama.chat(model='{selected_model}')",
     ]
     try:
         response = ollama.chat(model=selected_model, messages=messages)
