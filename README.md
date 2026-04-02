@@ -43,7 +43,7 @@ O projeto agora possui um fluxo de inicialização automática. Basta executar o
      ./agent-setup.sh
      ```
 
-O setup cria um ambiente virtual `.venv`, instala as dependências dentro dele e cria os comandos globais `agent-ollama`, `agent-ollama-server` e `ollama-autonomos`.
+O setup cria um ambiente virtual `.venv`, instala as dependências dentro dele e cria os comandos globais `agent-ollama`, `agent-ollama-server`, `ollama-autonomos` e `ollama-autonomo`.
 
 ### Usar de qualquer lugar
 Após o setup, basta abrir um novo terminal e rodar:
@@ -61,6 +61,7 @@ agent-ollama-server --host 0.0.0.0 --port 5000
 Ou use o alias:
 ```bash
 ollama-autonomos --host 0.0.0.0 --port 5000
+ollama-autonomo help
 ```
 
 No Linux, se `~/.local/bin` não estiver no PATH, feche e reabra o terminal ou rode:
@@ -113,6 +114,24 @@ Em seguida, abra no navegador:
 ```text
 http://127.0.0.1:5000
 ```
+
+### Problema comum: "acesso negado" no navegador
+
+Se o servidor estiver em outra máquina (ex.: Ubuntu/WSL/servidor) e você abrir no navegador do Windows/celular, inicie com host público:
+
+```bash
+agent-ollama-server --host 0.0.0.0 --port 5000
+```
+
+Depois acesse pelo IP da máquina onde o servidor está rodando:
+
+```text
+http://IP-DA-MAQUINA:5000
+```
+
+Também garanta que a porta `5000` esteja liberada no firewall da máquina do servidor.
+
+Se você usa Tailscale/VPN, prefira o IP `100.x.x.x` da interface da VPN e confirme que as ACLs da VPN permitem conexão entre os dois nós na porta `5000`.
 
 A interface web permite configurar:
 - nome do usuário
