@@ -970,46 +970,8 @@ async def chat():
 
 if __name__ == "__main__":
     try:
-        # Modo de configuração
-        if len(sys.argv) > 1 and sys.argv[1] == "config":
-            console.print(Panel("[bold cyan]Agent Ollie - Modo de Configuração[/bold cyan]", border_style="cyan"))
-            
-            # Menu de configuração
-            while True:
-                console.print("\n[bold]Selecione o que deseja configurar:[/bold]")
-                console.print("1. Nome do Usuário")
-                console.print("2. Modelo do Ollama")
-                console.print("3. Voz local")
-                console.print("4. Chave ElevenLabs API (opcional)")
-                console.print("5. Senha Sudo (Linux)")
-                console.print("0. Sair e Salvar")
-                
-                opcao = console.input("\n[bold yellow]Opção: [/bold yellow]").strip()
-                
-                if opcao == "1":
-                    settings["user_name"] = console.input(f"Novo nome (atual: {settings['user_name']}): ").strip() or settings["user_name"]
-                elif opcao == "2":
-                    settings["ollama_model"] = console.input(f"Novo modelo (atual: {settings['ollama_model']}): ").strip() or settings["ollama_model"]
-                elif opcao == "3":
-                    settings["tts_voice"] = console.input(f"Nova voz local (atual: {settings['tts_voice']}): ").strip() or settings["tts_voice"]
-                elif opcao == "4":
-                    settings["tts_api_key"] = console.input("Nova chave ElevenLabs API (não será exibida): ").strip() or settings["tts_api_key"]
-                    reload_tts_engine()
-                elif opcao == "5":
-                    if IS_WINDOWS:
-                        console.print("[red]Sudo não é usado no Windows.[/red]")
-                    else:
-                        settings["sudo_password"] = console.input("Nova senha sudo: ").strip() or settings["sudo_password"]
-                elif opcao == "0":
-                    save_settings(settings)
-                    console.print("[green]Configurações salvas![/green]")
-                    sys.exit(0)
-
-                save_settings(settings)
-
-        # Se chegou aqui, é o modo interativo normal
-        check_instance_lock()
-        asyncio.run(chat())
+        from pc_app.server import main as run_web_server
+        run_web_server(sys.argv[1:])
     except KeyboardInterrupt:
         pass
     finally:

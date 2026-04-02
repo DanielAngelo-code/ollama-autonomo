@@ -31,12 +31,15 @@ python3 server.py --host 0.0.0.0 --port 5000
 Se você já rodou o setup do projeto, também pode iniciar o servidor de qualquer diretório com o comando global:
 
 ```bash
-agent-ollama-server --host 0.0.0.0 --port 5000
+agent-ollama
 ```
 
-Ou use o alias:
+O comando `agent-ollama` inicia o app web por padrão.
+
+Também estão disponíveis:
 
 ```bash
+agent-ollama-server --host 0.0.0.0 --port 5000
 ollama-autonomos --host 0.0.0.0 --port 5000
 ```
 

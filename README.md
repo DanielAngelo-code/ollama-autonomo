@@ -51,7 +51,9 @@ Após o setup, basta abrir um novo terminal e rodar:
 agent-ollama
 ```
 
-Para iniciar o servidor do app PC a partir de qualquer lugar:
+O comando `agent-ollama` inicia o servidor web do app.
+
+Se preferir, também é possível iniciar diretamente o servidor com:
 ```bash
 agent-ollama-server --host 0.0.0.0 --port 5000
 ```
@@ -73,27 +75,28 @@ source ~/.bashrc
    ```
 
 ### Configurações Adicionais:
-Você pode configurar a voz ElevenLabs local e outras preferências usando o comando:
+Você pode ajustar o nome do usuário, modelo, TTS e voz diretamente pela interface web.
+
+### 🌐 App Web
+O projeto agora roda como um app web. Basta iniciar o servidor com:
 ```bash
-agent-ollama config
+agent-ollama
 ```
 
-### 🖥️ App PC com Interface
-O projeto também inclui um app local com servidor web em `pc_app/server.py`.
-Basta rodar no servidor Ubuntu ou no dispositivo onde o Ollama está instalado:
+E então abrir o navegador em:
+```text
+http://127.0.0.1:5000
+```
+
+Se você quiser expor o servidor para outros dispositivos na rede:
+```bash
+agent-ollama --host 0.0.0.0 --port 5000
+```
+
+Também é possível usar o servidor diretamente em `pc_app`:
 ```bash
 cd pc_app
 python3 server.py --host 0.0.0.0 --port 5000
-```
-
-Então abra no navegador do seu Windows PC usando o IP do servidor:
-```text
-http://<IP-do-servidor>:5000
-```
-
-Se preferir, também é possível usar variáveis de ambiente:
-```bash
-APP_HOST=0.0.0.0 APP_PORT=5000 python3 server.py
 ```
 
 ---
@@ -101,19 +104,22 @@ APP_HOST=0.0.0.0 APP_PORT=5000 python3 server.py
 ## 📖 Como Usar
 
 ### Execução de Qualquer Lugar
-Após o setup, você pode simplesmente digitar em qualquer terminal:
+Após o setup, você pode iniciar o app web com:
 ```bash
 agent-ollama
 ```
 
-### Comandos Especiais
-- `/model <nome>`: Troca o modelo (ex: `/model llama3`).
-- `/voices`: Lista vozes ElevenLabs locais disponíveis.
-- `/setvoice <nome_da_voz>`: Altera a voz do assistente.
-- `/setapikey <sua_chave>`: Salva e recarrega a chave ElevenLabs API.
-- `/setsudo <senha>`: (Linux apenas) Salva a senha para comandos `sudo`.
-- `/clearmem`: Limpa a memória e o histórico.
-- `sair`, `exit` ou `quit`: Encerra o assistente.
+Em seguida, abra no navegador:
+```text
+http://127.0.0.1:5000
+```
+
+A interface web permite configurar:
+- nome do usuário
+- modelo do Ollama
+- opções de TTS
+- voz e chave ElevenLabs
+- exibição de pensamentos
 
 ## 🛡️ Segurança
 

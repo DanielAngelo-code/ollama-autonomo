@@ -305,7 +305,7 @@ def audio_files(filename):
     return send_from_directory(AUDIO_DIR, filename)
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Agent Ollama PC App server")
     parser.add_argument(
         "--host",
@@ -324,9 +324,13 @@ def parse_args():
         default=os.getenv("APP_DEBUG", "false").lower() in ["1", "true", "yes"],
         help="Ativa modo debug do Flask",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    app.run(host=args.host, port=args.port, debug=args.debug)
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    main()
