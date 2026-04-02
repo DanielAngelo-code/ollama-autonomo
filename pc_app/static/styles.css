@@ -178,13 +178,17 @@ footer p {
     background: rgba(191, 120, 255, 0.2);
 }
 
-.status,
-.error {
-    margin-top: 0;
-    padding: 14px 18px;
+.composer {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(8, 9, 20, 0.92);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.28);
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.04);
-    color: #c8d1e3;
+    z-index: 4;
 }
 
 .chat-message.process {
@@ -222,9 +226,11 @@ textarea, input, select {
     color: var(--txt);
 }
 
-footer {
-    text-align: center;
-    font-size: 0.95rem;
+.panel {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 14px;
 }
 
 @media (max-width: 880px) {
