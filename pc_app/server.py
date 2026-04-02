@@ -44,7 +44,7 @@ DEFAULT_SETTINGS = {
     "show_thoughts": False,
 }
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 
 def load_settings():
