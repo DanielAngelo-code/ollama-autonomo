@@ -970,7 +970,14 @@ async def chat():
 
 if __name__ == "__main__":
     try:
-        from pc_app.server import main as run_web_server
+        try:
+            from pc_app.server import main as run_web_server
+        except ModuleNotFoundError as e:
+            console.print(f"[bold red]Erro ao iniciar o app web:[/bold red] módulo não encontrado: {e.name}")
+            console.print("Instale as dependências com: [bold green]python -m pip install -r requirements.txt[/bold green]")
+            console.print("Ou execute o setup do projeto antes de iniciar.")
+            sys.exit(1)
+
         run_web_server(sys.argv[1:])
     except KeyboardInterrupt:
         pass
