@@ -1,6 +1,5 @@
 const promptEl = document.getElementById("prompt");
 const sendButton = document.getElementById("sendButton");
-const recordButton = document.getElementById("recordButton");
 const menuButton = document.getElementById("menuButton");
 const closeDrawerButton = document.getElementById("closeDrawer");
 const settingsDrawer = document.getElementById("settingsDrawer");
@@ -33,10 +32,6 @@ function appendChatMessage(role, text, type = "") {
     item.textContent = `${role === "user" ? "usuário" : "bot"}: ${text}`;
     chatLog.appendChild(item);
     chatLog.scrollTop = chatLog.scrollHeight;
-}
-
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function updateResponseMedia(audioUrl = null, error = null) {
@@ -103,7 +98,7 @@ async function toggleVoiceRecording() {
     };
     recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
-        recordButton.textContent = "🎤 Iniciar conversa de voz";
+        recordButton.textContent = "🎤";
         const blob = new Blob(recordingChunks, { type: "audio/webm" });
         const formData = new FormData();
         formData.append("audio", blob, "voice.webm");
@@ -113,31 +108,24 @@ async function toggleVoiceRecording() {
             appendChatMessage("bot", data.error || "Falha ao transcrever áudio.", "error");
             return;
         }
-        const transcript = data.text || "";
-        if (!transcript) {
-            appendChatMessage("bot", "Não consegui entender o áudio. Tente novamente.", "error");
-            return;
-        }
-        appendChatMessage("user", transcript);
-        appendChatMessage("bot", "Áudio recebido, processando...", "process");
-        await askPrompt(transcript, true);
+        promptEl.value = data.text || "";
+        appendChatMessage("bot", `Transcrição: ${promptEl.value}`, "process");
     };
     recorder.start();
-    recordButton.textContent = "⏹ Parar gravação";
+    recordButton.textContent = "⏹";
 }
 
-async function askPrompt(externalPrompt = null, skipUserEcho = false) {
-    const prompt = (externalPrompt || promptEl.value).trim();
+async function askPrompt() {
+    const prompt = promptEl.value.trim();
     if (!prompt) {
         updateResponseMedia(null, "Digite um prompt antes de enviar.");
         return;
     }
     responseSection.classList.remove("hidden");
-    if (!skipUserEcho) {
-        appendChatMessage("user", prompt);
-    }
+    appendChatMessage("user", prompt);
+    appendChatMessage("bot", "ok!");
+    appendChatMessage("bot", "executando tarefa...");
     responseError.textContent = "";
-    promptEl.value = "";
 
     try {
         const response = await fetch("/api/ask", {
@@ -160,10 +148,7 @@ async function askPrompt(externalPrompt = null, skipUserEcho = false) {
         }
 
         if (Array.isArray(data.process_log)) {
-            for (const message of data.process_log) {
-                appendChatMessage("bot", message, "process");
-                await sleep(280);
-            }
+            data.process_log.forEach((message) => appendChatMessage("bot", message, "process"));
         }
         if (showThoughts.checked && data.thoughts) {
             appendChatMessage("bot", `pensamentos: ${data.thoughts}`, "thought");
@@ -217,7 +202,6 @@ function toggleDrawer(force = null) {
 }
 
 sendButton.addEventListener("click", askPrompt);
-recordButton.addEventListener("click", toggleVoiceRecording);
 menuButton.addEventListener("click", () => toggleDrawer());
 closeDrawerButton.addEventListener("click", () => toggleDrawer(false));
 saveSettingsButton.addEventListener("click", saveSettings);
@@ -233,5 +217,5 @@ promptEl.addEventListener("keydown", (event) => {
 
 window.addEventListener("load", async () => {
     await fetchSettings();
-    appendChatMessage("bot", "Olá! Clique em 'Iniciar conversa de voz' e fale comigo.");
+    appendChatMessage("bot", "Olá! Envie uma instrução para começar.");
 });
