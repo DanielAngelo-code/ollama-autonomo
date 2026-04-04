@@ -3,33 +3,37 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agent Ollama - PC App</title>
+    <title>Agent Ollama - Chat</title>
     <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-    <header>
-        <h1>Agent Ollama - PC App</h1>
-        <p>Servidor local para enviar prompts ao Ollama, ver a resposta em texto e ouvir o áudio.</p>
+    <header class="topbar">
+        <button id="menuButton" class="menu-button" aria-label="Abrir configurações">☰</button>
+        <div class="brand">
+            <img src="/static/agent-face.svg" alt="Avatar artístico do bot" class="agent-avatar" width="56" height="56" />
+            <div>
+                <h1>Ollie Chat</h1>
+                <p>Converse com o assistente local em tempo real.</p>
+            </div>
+        </div>
     </header>
 
-    <main>
-        <section class="panel">
-            <h2>Envie uma instrução</h2>
-            <textarea id="prompt" placeholder="Digite sua instrução para o bot..."></textarea>
-            <div class="controls">
-                <button id="sendButton">Enviar</button>
-                <button id="refreshModels">Atualizar Modelos</button>
-            </div>
-            <div id="responseSection" class="response hidden">
-                <h3>Resposta do LLM</h3>
-                <pre id="responseText"></pre>
-                <audio id="audioPlayer" controls class="hidden"></audio>
-                <div id="responseError" class="error"></div>
-            </div>
+    <main class="chat-shell">
+        <section id="responseSection" class="response">
+            <div id="chatLog" class="chat-log"></div>
+            <audio id="audioPlayer" controls class="hidden"></audio>
+            <div id="responseError" class="error"></div>
         </section>
+        <footer class="composer">
+            <textarea id="prompt" placeholder="Modo voz: clique em 'Iniciar conversa de voz' e fale." rows="2"></textarea>
+            <button id="recordButton" type="button">🎤 Iniciar conversa de voz</button>
+            <button id="sendButton">Enviar texto</button>
+        </footer>
+    </main>
 
-        <section class="panel">
-            <h2>Configurações do Bot</h2>
+    <aside id="settingsDrawer" class="settings-drawer hidden">
+        <div class="panel">
+            <h2>Configurações</h2>
             <div class="form-grid">
                 <label>Nome do usuário</label>
                 <input id="userName" type="text" />
@@ -38,40 +42,24 @@
                 <label>Habilitar TTS</label>
                 <input id="ttsEnabled" type="checkbox" />
                 <label>Motor TTS</label>
-                <select id="ttsEngine">
-                    <option value="local">Local (pyttsx3)</option>
-                    <option value="elevenlabs">ElevenLabs</option>
-                </select>
-                <label>Voz TTS</label>
-                <input id="ttsVoice" type="text" />
-                <label>Chave ElevenLabs</label>
-                <input id="ttsApiKey" type="password" />
+                <input value="Coqui TTS" disabled />
                 <label>Mostrar pensamentos</label>
                 <input id="showThoughts" type="checkbox" />
             </div>
             <div class="controls">
                 <button id="saveSettings">Salvar Configurações</button>
                 <button id="loadSettings">Recarregar Configurações</button>
+                <button id="closeDrawer">Fechar</button>
             </div>
             <div id="settingsStatus" class="status"></div>
-        </section>
-
-        <section class="panel">
-            <h2>Modelos e Vozes</h2>
-            <div class="info-block">
+            <div class="controls">
                 <button id="fetchModels">Listar Modelos Ollama</button>
-                <ul id="modelList"></ul>
-            </div>
-            <div class="info-block">
                 <button id="fetchVoices">Listar Vozes TTS</button>
-                <ul id="voiceList"></ul>
             </div>
-        </section>
-    </main>
-
-    <footer>
-        <p>Abra o navegador em <strong>http://127.0.0.1:5000</strong> após iniciar <code>python pc_app/server.py</code>.</p>
-    </footer>
+            <ul id="modelList"></ul>
+            <ul id="voiceList"></ul>
+        </div>
+    </aside>
 
     <script src="/static/app.js"></script>
 </body>

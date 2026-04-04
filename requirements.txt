@@ -2,5 +2,6 @@ ollama
 rich
 pygame
 flask
-elevenlabs>=2.40.0
 pyttsx3
+TTS
+openai-whisper
