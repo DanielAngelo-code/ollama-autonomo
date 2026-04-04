@@ -44,23 +44,14 @@ if not os.path.exists(AUDIO_DIR):
 DEFAULT_SETTINGS = {
     "user_name": "Usuário",
     "ollama_model": "llama3",
-    "tts_engine": "coqui",
-    "tts_voice": "",
+    "tts_engine": "local",
+    "tts_voice": "Rachel",
     "tts_api_key": "",
     "tts_enabled": True,
     "show_thoughts": False,
 }
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
-app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
-
-
-@app.after_request
-def add_no_cache_headers(response):
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
 
 
 def load_settings():
@@ -193,8 +184,8 @@ class ElevenLabsTTS:
         audio_iter = self.client.text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            output_format="mp3_44100_128",
-            model_id=self.model,
+            output_format="wav_44100",
+            model_id=model,
         )
         audio_data = b"".join(audio_iter)
         with open(output_path, "wb") as f:
@@ -239,11 +230,13 @@ def normalize_models(raw_models):
 
 
 def build_tts(settings):
-    try:
-        return CoquiTTS()
-    except Exception as error:
-        print(f"Aviso: Coqui TTS indisponível: {error}")
-        return None
+    if settings.get("tts_engine") == "elevenlabs" and settings.get("tts_api_key"):
+        return ElevenLabsTTS(api_key=settings.get("tts_api_key"), voice=settings.get("tts_voice"))
+    manager = LocalTTS()
+    requested_voice = settings.get("tts_voice")
+    if requested_voice and not manager.set_voice(requested_voice):
+        print(f"Aviso: voz local '{requested_voice}' não encontrada; usando padrão.")
+    return manager
 
 
 settings = load_settings()
@@ -286,11 +279,14 @@ def api_settings():
         data = request.get_json(force=True)
         if not isinstance(data, dict):
             return jsonify({"error": "Dados inválidos."}), 400
+        engine = data.get("tts_engine", settings.get("tts_engine"))
+        if engine not in ("local", "elevenlabs"):
+            engine = "local"
         settings.update({
             "user_name": data.get("user_name", settings.get("user_name")),
             "ollama_model": data.get("ollama_model", settings.get("ollama_model")),
             "tts_enabled": bool(data.get("tts_enabled", settings.get("tts_enabled"))),
-            "tts_engine": "coqui",
+            "tts_engine": engine,
             "tts_voice": data.get("tts_voice", settings.get("tts_voice")),
             "tts_api_key": "",
             "show_thoughts": bool(data.get("show_thoughts", settings.get("show_thoughts", False))),
@@ -301,8 +297,6 @@ def api_settings():
         except Exception as error:
             tts_manager = None
             return jsonify({**settings, "tts_warning": f"Falha ao recarregar TTS: {error}"})
-        if settings.get("tts_enabled") and tts_manager is None:
-            return jsonify({**settings, "tts_warning": "Coqui TTS indisponível nesta máquina; mantendo respostas em texto."})
         return jsonify(settings)
     return jsonify(settings)
 
@@ -370,7 +364,8 @@ def api_ask():
 
     selected_model = settings.get("ollama_model", "llama3")
     process_log = [
-        f"Iniciando consulta no modelo: {selected_model}",
+        "OK! Vou executar sua tarefa.",
+        f"Executando: ollama.chat(model='{selected_model}')",
     ]
     try:
         response = ollama.chat(model=selected_model, messages=messages)

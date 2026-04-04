@@ -1,6 +1,5 @@
 const promptEl = document.getElementById("prompt");
 const sendButton = document.getElementById("sendButton");
-const recordButton = document.getElementById("recordButton");
 const menuButton = document.getElementById("menuButton");
 const closeDrawerButton = document.getElementById("closeDrawer");
 const settingsDrawer = document.getElementById("settingsDrawer");
@@ -33,10 +32,6 @@ function appendChatMessage(role, text, type = "") {
     item.textContent = `${role === "user" ? "usuário" : "bot"}: ${text}`;
     chatLog.appendChild(item);
     chatLog.scrollTop = chatLog.scrollHeight;
-}
-
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function updateResponseMedia(audioUrl = null, error = null) {
@@ -128,8 +123,9 @@ async function askPrompt() {
     }
     responseSection.classList.remove("hidden");
     appendChatMessage("user", prompt);
+    appendChatMessage("bot", "ok!");
+    appendChatMessage("bot", "executando tarefa...");
     responseError.textContent = "";
-    promptEl.value = "";
 
     try {
         const response = await fetch("/api/ask", {
@@ -152,10 +148,7 @@ async function askPrompt() {
         }
 
         if (Array.isArray(data.process_log)) {
-            for (const message of data.process_log) {
-                appendChatMessage("bot", message, "process");
-                await sleep(280);
-            }
+            data.process_log.forEach((message) => appendChatMessage("bot", message, "process"));
         }
         if (showThoughts.checked && data.thoughts) {
             appendChatMessage("bot", `pensamentos: ${data.thoughts}`, "thought");
@@ -209,7 +202,6 @@ function toggleDrawer(force = null) {
 }
 
 sendButton.addEventListener("click", askPrompt);
-recordButton.addEventListener("click", toggleVoiceRecording);
 menuButton.addEventListener("click", () => toggleDrawer());
 closeDrawerButton.addEventListener("click", () => toggleDrawer(false));
 saveSettingsButton.addEventListener("click", saveSettings);
