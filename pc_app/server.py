@@ -20,9 +20,16 @@ except ImportError:
     pyttsx3 = None
 
 try:
-    import elevenlabs
+    from TTS.api import TTS as CoquiModel
 except ImportError:
-    elevenlabs = None
+    CoquiModel = None
+
+try:
+    import whisper
+except ImportError:
+    whisper = None
+
+elevenlabs = None
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -64,6 +71,24 @@ def load_settings():
 def save_settings(settings):
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=4, ensure_ascii=False)
+
+
+class CoquiTTS:
+    def __init__(self, model_name="tts_models/pt/cv/vits"):
+        if CoquiModel is None:
+            raise RuntimeError("Coqui TTS não instalado. Instale com `pip install TTS`.")
+        self.model_name = model_name
+        self.tts = CoquiModel(model_name=model_name, progress_bar=False, gpu=False)
+
+    def list_voices(self):
+        return [{"id": self.model_name, "name": self.model_name}]
+
+    def file_extension(self):
+        return "wav"
+
+    def generate_audio(self, text, output_path):
+        self.tts.tts_to_file(text=text, file_path=output_path)
+        return output_path
 
 
 class LocalTTS:
@@ -221,6 +246,17 @@ except Exception as error:
     tts_manager = None
     print(f"Aviso: TTS não inicializado: {error}")
 
+whisper_model = None
+
+
+def get_whisper_model():
+    global whisper_model
+    if whisper is None:
+        raise RuntimeError("Whisper não instalado. Instale com `pip install openai-whisper`.")
+    if whisper_model is None:
+        whisper_model = whisper.load_model("base")
+    return whisper_model
+
 
 @app.route("/")
 def index():
@@ -252,7 +288,7 @@ def api_settings():
             "tts_enabled": bool(data.get("tts_enabled", settings.get("tts_enabled"))),
             "tts_engine": engine,
             "tts_voice": data.get("tts_voice", settings.get("tts_voice")),
-            "tts_api_key": data.get("tts_api_key", settings.get("tts_api_key", "")),
+            "tts_api_key": "",
             "show_thoughts": bool(data.get("show_thoughts", settings.get("show_thoughts", False))),
         })
         save_settings(settings)
@@ -273,6 +309,30 @@ def api_voices():
         return jsonify({"voices": tts_manager.list_voices()})
     except Exception as error:
         return jsonify({"voices": [], "error": str(error)})
+
+
+@app.route("/api/transcribe", methods=["POST"])
+def api_transcribe():
+    if "audio" not in request.files:
+        return jsonify({"error": "Arquivo de áudio não enviado."}), 400
+    audio_file = request.files["audio"]
+    if not audio_file.filename:
+        return jsonify({"error": "Nome de arquivo inválido."}), 400
+    temp_name = f"input_{int(time.time() * 1000)}.webm"
+    temp_path = os.path.join(AUDIO_DIR, temp_name)
+    audio_file.save(temp_path)
+    try:
+        model = get_whisper_model()
+        result = model.transcribe(temp_path, language="pt")
+        text = (result.get("text") or "").strip()
+        return jsonify({"text": text})
+    except Exception as error:
+        return jsonify({"error": f"Falha na transcrição Whisper: {error}"}), 500
+    finally:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
 
 
 @app.route("/api/models")

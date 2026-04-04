@@ -10,9 +10,6 @@ const audioPlayer = document.getElementById("audioPlayer");
 const userName = document.getElementById("userName");
 const modelName = document.getElementById("modelName");
 const ttsEnabled = document.getElementById("ttsEnabled");
-const ttsEngine = document.getElementById("ttsEngine");
-const ttsVoice = document.getElementById("ttsVoice");
-const ttsApiKey = document.getElementById("ttsApiKey");
 const showThoughts = document.getElementById("showThoughts");
 const saveSettingsButton = document.getElementById("saveSettings");
 const loadSettingsButton = document.getElementById("loadSettings");
@@ -21,6 +18,8 @@ const fetchModelsButton = document.getElementById("fetchModels");
 const fetchVoicesButton = document.getElementById("fetchVoices");
 const modelList = document.getElementById("modelList");
 const voiceList = document.getElementById("voiceList");
+let recorder = null;
+let recordingChunks = [];
 
 function showStatus(text, isError = false) {
     settingsStatus.textContent = text;
@@ -60,9 +59,6 @@ async function fetchSettings() {
     userName.value = data.user_name || "";
     modelName.value = data.ollama_model || "";
     ttsEnabled.checked = Boolean(data.tts_enabled);
-    ttsEngine.value = data.tts_engine || "local";
-    ttsVoice.value = data.tts_voice || "";
-    ttsApiKey.value = data.tts_api_key || "";
     showThoughts.checked = Boolean(data.show_thoughts);
 }
 
@@ -71,9 +67,7 @@ async function saveSettings() {
         user_name: userName.value,
         ollama_model: modelName.value,
         tts_enabled: ttsEnabled.checked,
-        tts_engine: ttsEngine.value,
-        tts_voice: ttsVoice.value,
-        tts_api_key: ttsApiKey.value,
+        tts_engine: "coqui",
         show_thoughts: showThoughts.checked,
     };
     const response = await fetch("/api/settings", {
@@ -87,6 +81,38 @@ async function saveSettings() {
     } else {
         showStatus(data.error || "Erro ao salvar configurações.", true);
     }
+}
+
+async function toggleVoiceRecording() {
+    if (recorder && recorder.state === "recording") {
+        recorder.stop();
+        return;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new MediaRecorder(stream);
+    recordingChunks = [];
+    recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+            recordingChunks.push(event.data);
+        }
+    };
+    recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        recordButton.textContent = "🎤";
+        const blob = new Blob(recordingChunks, { type: "audio/webm" });
+        const formData = new FormData();
+        formData.append("audio", blob, "voice.webm");
+        const response = await fetch("/api/transcribe", { method: "POST", body: formData });
+        const data = await response.json();
+        if (!response.ok) {
+            appendChatMessage("bot", data.error || "Falha ao transcrever áudio.", "error");
+            return;
+        }
+        promptEl.value = data.text || "";
+        appendChatMessage("bot", `Transcrição: ${promptEl.value}`, "process");
+    };
+    recorder.start();
+    recordButton.textContent = "⏹";
 }
 
 async function askPrompt() {
